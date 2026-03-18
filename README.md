@@ -20,6 +20,6 @@ Local-first VS Code helper that explains code and answers questions using your o
 6) Use it: click “Explain this code” CodeLens or the status bar “Ask AI” button; the side panel will show the answer from your local model.
 
 ## Configuration (VS Code settings)
-- `codelensAI.ollamaEndpoint`: Ollama URL (default `http://89.116.212.35:11434`).  
+- `codelensAI.ollamaEndpoint`: Ollama URL (default `http://localhost:11434`).  
 - `codelensAI.model`: Model name to use (default `gemma3:1b`).  
 - Other UI toggles live under the `codelensAI.prototype.*` settings.
