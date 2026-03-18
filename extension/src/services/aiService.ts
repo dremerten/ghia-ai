@@ -8,7 +8,9 @@ export interface AIConfig {
 
 // Use a capable default model available from Ollama's catalog.
 const DEFAULT_MODEL = "codegemma:2b";
-const DEFAULT_ENDPOINT = "http://89.116.212.35:11434";
+// Keep the default local; allow overriding without committing IPs/hosts.
+const DEFAULT_ENDPOINT =
+  process.env.GHIA_AI_OLLAMA_ENDPOINT ?? "http://localhost:11434";
 /** Maximum time to wait for an AI request before aborting (ms). */
 const AI_REQUEST_TIMEOUT_MS = 300_000; // 5 minutes for slow CPU-only runs
 

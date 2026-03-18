@@ -24788,7 +24788,7 @@ var vscode3 = __toESM(require("vscode"));
 var vscode = __toESM(require("vscode"));
 var import_undici = __toESM(require_undici());
 var DEFAULT_MODEL = "codegemma:2b";
-var DEFAULT_ENDPOINT = "http://89.116.212.35:11434";
+var DEFAULT_ENDPOINT = process.env.GHIA_AI_OLLAMA_ENDPOINT ?? "http://localhost:11434";
 var AI_REQUEST_TIMEOUT_MS = 3e5;
 function createAbortSignalWithTimeout(token) {
   const controller = new AbortController();

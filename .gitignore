@@ -19,6 +19,7 @@ backend/local.settings.json
 # Environment files
 .env.local
 .env
+.ghia-ai-endpoint
 
 # OS files
 .DS_Store
