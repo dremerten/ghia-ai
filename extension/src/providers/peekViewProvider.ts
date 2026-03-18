@@ -7,7 +7,7 @@ import { ContextExtractor } from "../utils/contextExtractor";
  * URI scheme for explanation virtual documents.
  * Virtual documents live in memory, not on disk.
  */
-const EXPLAIN_SCHEME = "codelens-explain";
+const EXPLAIN_SCHEME = "ghia-explain";
 
 /**
  * Stores explanation content keyed by a unique ID for virtual document retrieval.
@@ -23,7 +23,7 @@ interface ExplanationData {
 
 /**
  * Provides content for virtual explanation documents.
- * When VS Code needs to display a `codelens-explain://` URI, this provider
+ * When VS Code needs to display a `ghia-explain://` URI, this provider
  * returns the formatted explanation content.
  */
 export class ExplanationDocumentProvider

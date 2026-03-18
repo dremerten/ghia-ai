@@ -24809,7 +24809,7 @@ function createAbortSignalWithTimeout(token) {
 var AIService = class {
   fetchImpl = globalThis.fetch ? globalThis.fetch.bind(globalThis) : import_undici.fetch;
   getConfig() {
-    const config = vscode.workspace.getConfiguration("codelensAI");
+    const config = vscode.workspace.getConfiguration("ghiaAI");
     const modelFromConfig = config.get("model");
     const model = typeof modelFromConfig === "string" && modelFromConfig.trim() ? modelFromConfig : DEFAULT_MODEL;
     return {
@@ -24857,7 +24857,7 @@ var AIService = class {
         return "Request was cancelled.";
       }
       const message = `${this.analyzeError(err)} (model tried: ${model}, endpoint: ${cfg.ollamaEndpoint})`;
-      console.error("[CodeLens AI]", err);
+      console.error("[ghia-ai]", err);
       throw new Error(message);
     }
   }
@@ -24977,7 +24977,7 @@ _Time: ${s}s_`;
       if (status === 404) {
         const match = /model ['"]?([^'"]+)['"]? not found/i.exec(message);
         const modelName = match?.[1] ?? "the configured model";
-        return `Model "${modelName}" is not available on your Ollama instance. Run: ollama pull ${modelName}, or set "codelensAI.model" to a model you have.`;
+        return `Model "${modelName}" is not available on your Ollama instance. Run: ollama pull ${modelName}, or set "ghiaAI.model" to a model you have.`;
       }
       if (status === 401 || status === 403) {
         return "Authentication failed (401/403). Check your Ollama instance configuration.";
@@ -24995,7 +24995,7 @@ _Time: ${s}s_`;
     if (/econnrefused|econnreset|enotfound|network|fetch failed|failed to fetch/i.test(
       msgLower
     ) || error instanceof TypeError && msgLower.includes("fetch")) {
-      return "Could not reach Ollama. Ensure it is running locally and `codelensAI.ollamaEndpoint` is correct.";
+      return "Could not reach Ollama. Ensure it is running locally and `ghiaAI.ollamaEndpoint` is correct.";
     }
     if (/timeout|etimedout|timed out/i.test(msgLower)) {
       return "The request timed out. Check your network or try again.";
@@ -25829,7 +25829,7 @@ var CodeLensHoverProvider = class {
       }
     });
     this.configListener = vscode3.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration("codelensAI.highlightColor"))
+      if (e.affectsConfiguration("ghiaAI.highlightColor"))
         this.updateDecorationType();
     });
     this.themeListener = vscode3.window.onDidChangeActiveColorTheme(
@@ -25855,7 +25855,7 @@ var CodeLensHoverProvider = class {
     return false;
   }
   getHighlightColor() {
-    const custom = vscode3.workspace.getConfiguration("codelensAI").get("highlightColor");
+    const custom = vscode3.workspace.getConfiguration("ghiaAI").get("highlightColor");
     if (custom && custom.trim().length > 0) return custom.trim();
     const kind = vscode3.window.activeColorTheme.kind;
     if (kind === vscode3.ColorThemeKind.HighContrast)
@@ -26012,7 +26012,7 @@ var CodeLensHoverProvider = class {
       this.cacheService.set(code, explanation);
     } catch (err) {
       if (token?.isCancellationRequested) return;
-      console.error("[CodeLens AI] fetchExplanation failed", err);
+      console.error("[ghia-ai] fetchExplanation failed", err);
       const message = err instanceof Error ? err.message : String(err);
       this.cacheService.set(
         code,
@@ -26209,7 +26209,7 @@ var CodeLensHoverProvider = class {
       }
     }
     this.explanationPanel = vscode3.window.createWebviewPanel(
-      "codelensAiExplain",
+      "ghiaAiExplain",
       title,
       vscode3.ViewColumn.Beside,
       { enableScripts: false }
@@ -26272,7 +26272,6 @@ function escapeHtml(text) {
 // src/managers/stateManager.ts
 var vscode4 = __toESM(require("vscode"));
 var STATE_KEY = "ghia-ai.state";
-var LEGACY_ENABLED_KEY = "codelensAI.enabled";
 var DEBOUNCE_MS = 500;
 var DEFAULT_STATE = {
   enabled: true,
@@ -26295,20 +26294,7 @@ var StateManager = class {
         hasShownWelcome: Boolean(stored.hasShownWelcome)
       };
     }
-    const legacyEnabled = this.context.globalState.get(LEGACY_ENABLED_KEY);
-    if (typeof legacyEnabled === "boolean") {
-      void this.migrateLegacyState(legacyEnabled);
-      return { ...DEFAULT_STATE, enabled: legacyEnabled };
-    }
     return { ...DEFAULT_STATE };
-  }
-  async migrateLegacyState(legacyEnabled) {
-    const migrated = {
-      ...DEFAULT_STATE,
-      enabled: legacyEnabled
-    };
-    await this.context.globalState.update(STATE_KEY, migrated);
-    await this.context.globalState.update(LEGACY_ENABLED_KEY, void 0);
   }
   getEnabled() {
     return this._state.enabled;
@@ -26348,7 +26334,7 @@ var StateManager = class {
 
 // src/managers/menuManager.ts
 var vscode5 = __toESM(require("vscode"));
-var CONFIG_NS = "codelensAI";
+var CONFIG_NS = "ghiaAI";
 var ACTION_PREFIX = "action:";
 var DEFAULT_MODEL2 = "llama3";
 var OLLAMA_MODELS = ["llama3", "llama3.2", "codellama", "mistral", "phi3"];
@@ -26358,7 +26344,7 @@ var MenuManager = class {
     this.context = context;
     this.configWatcherDisposable = vscode5.workspace.onDidChangeConfiguration(
       (e) => {
-        if (e.affectsConfiguration("codelensAI") && this.quickPick && this.quickPick.visible) {
+        if (e.affectsConfiguration("ghiaAI") && this.quickPick && this.quickPick.visible) {
           this.quickPick.items = this.buildItems();
         }
       }
@@ -26816,7 +26802,7 @@ var CodeLensExplainProvider = class {
       }
     }
     this.explanationPanel = vscode7.window.createWebviewPanel(
-      "codelensAiExplain",
+      "ghiaAiExplain",
       title,
       vscode7.ViewColumn.Beside,
       { enableScripts: false }
@@ -26849,7 +26835,7 @@ var CodeLensExplainProvider = class {
 
 // src/providers/peekViewProvider.ts
 var vscode8 = __toESM(require("vscode"));
-var EXPLAIN_SCHEME = "codelens-explain";
+var EXPLAIN_SCHEME = "ghia-explain";
 var explanationStore = /* @__PURE__ */ new Map();
 var ExplanationDocumentProvider = class {
   _onDidChange = new vscode8.EventEmitter();
@@ -27145,7 +27131,9 @@ var SidePanelProvider = class {
   contextExtractor = new ContextExtractor();
   view;
   history = [];
+  conversation = [];
   disposables = [];
+  askInFlight = false;
   // Track current explanation being displayed with full context for refresh
   currentExplanation = null;
   resolveWebviewView(webviewView, _context, _token) {
@@ -27174,10 +27162,17 @@ var SidePanelProvider = class {
             break;
           case "clearHistory":
             this.history = [];
+            this.conversation = [];
             this.updateView();
             break;
           case "explainSelection":
             await this.explainCurrentSelection();
+            break;
+          case "ask":
+            await this.handleAsk(message.question, {
+              includeSelection: Boolean(message.includeSelection),
+              includeFile: Boolean(message.includeFile)
+            });
             break;
         }
       },
@@ -27185,6 +27180,10 @@ var SidePanelProvider = class {
       this.disposables
     );
     this.updateView();
+    this.disposables.push(
+      vscode9.window.onDidChangeActiveTextEditor(() => this.updateView()),
+      vscode9.window.onDidChangeTextEditorSelection(() => this.updateView())
+    );
   }
   /**
    * Explains the currently selected or cursor-adjacent code.
@@ -27267,6 +27266,24 @@ var SidePanelProvider = class {
     if (this.history.length > 20) {
       this.history = this.history.slice(0, 20);
     }
+    const now = Date.now();
+    this.conversation.push(
+      {
+        id: this.generateId(),
+        role: "user",
+        content: `Explain ${fileName.split("/").pop()}:${lineNumber}`,
+        timestamp: now,
+        kind: "explain"
+      },
+      {
+        id: this.generateId(),
+        role: "assistant",
+        content: explanation,
+        timestamp: now,
+        kind: "explain"
+      }
+    );
+    this.trimConversation();
     this.updateView();
   }
   /**
@@ -27291,6 +27308,76 @@ var SidePanelProvider = class {
       this.currentExplanation.explanation = `Error: ${err instanceof Error ? err.message : String(err)}`;
     }
     this.currentExplanation.isLoading = false;
+    this.updateView();
+  }
+  /**
+   * Handles free-form questions from the side panel prompt.
+   * Mirrors Copilot/Claude side panels with a lightweight chat stream.
+   */
+  async handleAsk(question, options) {
+    const trimmed = question?.trim();
+    if (!trimmed) return;
+    const editor = vscode9.window.activeTextEditor;
+    const MAX_CHARS = 3e4;
+    let contextInfo;
+    if (editor) {
+      const doc = editor.document;
+      const selection = editor.selection;
+      if (options.includeSelection && selection && !selection.isEmpty) {
+        const content = doc.getText(selection);
+        contextInfo = {
+          languageId: doc.languageId,
+          content,
+          truncated: content.length > MAX_CHARS
+        };
+      } else if (options.includeFile) {
+        const full = doc.getText();
+        const truncated = full.length > MAX_CHARS;
+        const content = truncated ? full.slice(0, MAX_CHARS) : full;
+        contextInfo = {
+          languageId: doc.languageId,
+          content,
+          truncated
+        };
+      }
+    }
+    const userEntry = {
+      id: this.generateId(),
+      role: "user",
+      content: trimmed,
+      timestamp: Date.now(),
+      kind: "ask"
+    };
+    const assistantPlaceholder = {
+      id: this.generateId(),
+      role: "assistant",
+      content: "Thinking\u2026",
+      timestamp: Date.now(),
+      kind: "ask",
+      pending: true
+    };
+    this.conversation.push(userEntry, assistantPlaceholder);
+    this.trimConversation();
+    this.askInFlight = true;
+    this.updateView();
+    try {
+      const answer = await this.aiService.ask(trimmed, contextInfo);
+      this.replaceConversationEntry(assistantPlaceholder.id, {
+        ...assistantPlaceholder,
+        content: answer,
+        pending: false,
+        timestamp: Date.now()
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.replaceConversationEntry(assistantPlaceholder.id, {
+        ...assistantPlaceholder,
+        content: `Error: ${message}`,
+        pending: false,
+        timestamp: Date.now()
+      });
+    }
+    this.askInFlight = false;
     this.updateView();
   }
   /**
@@ -27331,12 +27418,48 @@ var SidePanelProvider = class {
       this.view.webview.postMessage({
         type: "update",
         explanation: this.currentExplanation,
-        history: this.history.slice(0, 10)
+        history: this.history.slice(0, 10),
+        conversation: this.conversation,
+        contextHints: this.getContextHints(),
+        busy: this.currentExplanation?.isLoading || this.askInFlight
       });
     }
   }
+  getContextHints() {
+    const editor = vscode9.window.activeTextEditor;
+    if (!editor) {
+      return {
+        hasSelection: false,
+        selectionLabel: null,
+        hasFile: false,
+        fileName: null
+      };
+    }
+    const selection = editor.selection;
+    const hasSelection = selection && !selection.isEmpty;
+    const selectionLines = hasSelection ? selection.end.line - selection.start.line + 1 : 0;
+    const selectionLabel = hasSelection ? `${selectionLines} line${selectionLines === 1 ? "" : "s"} selected` : null;
+    return {
+      hasSelection,
+      selectionLabel,
+      hasFile: true,
+      fileName: editor.document.fileName.split("/").pop() ?? null
+    };
+  }
   generateId() {
     return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  }
+  replaceConversationEntry(id, replacement) {
+    const idx = this.conversation.findIndex((c) => c.id === id);
+    if (idx >= 0) {
+      this.conversation[idx] = replacement;
+    }
+  }
+  trimConversation() {
+    const MAX_ENTRIES = 40;
+    if (this.conversation.length > MAX_ENTRIES) {
+      this.conversation = this.conversation.slice(-MAX_ENTRIES);
+    }
   }
   /**
    * Returns the HTML for the webview panel.
@@ -27349,309 +27472,364 @@ var SidePanelProvider = class {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
-  <title>ghia-ai</title>
+  <title>ghia-ai panel</title>
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
+    :root {
+      --surface: var(--vscode-sideBar-background);
+      --card: color-mix(in srgb, var(--vscode-editor-background) 82%, var(--vscode-sideBar-background));
+      --border: var(--vscode-panel-border);
+      --muted: var(--vscode-descriptionForeground);
+      --accent: var(--vscode-textLink-foreground);
     }
-    
+    * { box-sizing: border-box; }
     body {
+      margin: 0;
+      padding: 12px;
       font-family: var(--vscode-font-family);
       font-size: var(--vscode-font-size);
       color: var(--vscode-foreground);
-      background: var(--vscode-sideBar-background);
-      padding: 12px;
+      background: var(--surface);
       line-height: 1.5;
     }
-    
+    .panel {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      height: 100vh;
+    }
     .header {
       display: flex;
       align-items: center;
       gap: 8px;
-      margin-bottom: 16px;
-      padding-bottom: 12px;
-      border-bottom: 1px solid var(--vscode-panel-border);
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: linear-gradient(135deg, color-mix(in srgb, var(--card) 90%, var(--accent) 8%), var(--card));
     }
-    
-    .header h1 {
-      font-size: 14px;
-      font-weight: 600;
+    .title {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
       flex: 1;
     }
-    
+    .title-row { display: flex; align-items: center; gap: 6px; }
+    .title h1 { font-size: 14px; margin: 0; }
+    .subtitle { color: var(--muted); font-size: 12px; }
+    .pill {
+      border: 1px solid var(--border);
+      color: var(--accent);
+      padding: 2px 6px;
+      border-radius: 999px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .header-actions { display: flex; gap: 6px; }
     .btn {
-      background: var(--vscode-button-secondaryBackground);
-      color: var(--vscode-button-secondaryForeground);
-      border: none;
-      padding: 4px 8px;
-      border-radius: 3px;
-      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--vscode-foreground);
+      border-radius: 6px;
+      padding: 6px 10px;
       font-size: 12px;
+      cursor: pointer;
       display: inline-flex;
       align-items: center;
-      gap: 4px;
+      gap: 6px;
+      transition: border-color 120ms ease, background 120ms ease;
     }
-    
-    .btn:hover {
-      background: var(--vscode-button-secondaryHoverBackground);
-    }
-    
-    .btn-primary {
+    .btn:hover { border-color: var(--accent); }
+    .btn.primary {
       background: var(--vscode-button-background);
       color: var(--vscode-button-foreground);
+      border-color: transparent;
     }
-    
-    .btn-primary:hover {
-      background: var(--vscode-button-hoverBackground);
-    }
-    
+    .btn.primary:hover { background: var(--vscode-button-hoverBackground); }
+    .btn.ghost { background: transparent; }
     .section {
-      margin-bottom: 16px;
-    }
-    
-    .section-title {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: var(--vscode-descriptionForeground);
-      margin-bottom: 8px;
-    }
-    
-    .explanation-card {
-      background: var(--vscode-editor-background);
-      border: 1px solid var(--vscode-panel-border);
-      border-radius: 6px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--card);
       padding: 12px;
-      margin-bottom: 12px;
     }
-    
-    .explanation-text {
-      font-size: 13px;
-      line-height: 1.6;
-      white-space: pre-wrap;
-      word-wrap: break-word;
-    }
-    
-    .code-preview {
-      background: var(--vscode-textBlockQuote-background);
-      border-left: 3px solid var(--vscode-textLink-foreground);
-      padding: 8px 12px;
-      margin-top: 12px;
-      font-family: var(--vscode-editor-font-family);
-      font-size: 12px;
-      overflow-x: auto;
-      white-space: pre;
-      max-height: 150px;
-      overflow-y: auto;
-    }
-    
-    .actions {
-      display: flex;
-      gap: 8px;
-      margin-top: 12px;
-    }
-    
-    .loading {
+    .section-title {
       display: flex;
       align-items: center;
-      gap: 8px;
-      color: var(--vscode-descriptionForeground);
+      justify-content: space-between;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--muted);
+      margin-bottom: 6px;
     }
-    
+    .muted { color: var(--muted); font-size: 12px; }
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      background: var(--vscode-editor-background);
+      box-shadow: 0 1px 0 rgba(0,0,0,0.08);
+    }
+    .explanation-text { white-space: pre-wrap; word-wrap: break-word; }
+    .code-preview {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 6px;
+      background: var(--vscode-textBlockQuote-background);
+      border-left: 3px solid var(--accent);
+      font-family: var(--vscode-editor-font-family);
+      font-size: 12px;
+      overflow: auto;
+      max-height: 180px;
+    }
+    .actions { display: flex; gap: 8px; margin-top: 10px; }
     .spinner {
-      width: 16px;
-      height: 16px;
+      width: 16px; height: 16px;
       border: 2px solid var(--vscode-progressBar-background);
-      border-top: 2px solid var(--vscode-textLink-foreground);
+      border-top: 2px solid var(--accent);
       border-radius: 50%;
       animation: spin 1s linear infinite;
     }
-    
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .chat-stream { display: flex; flex-direction: column; gap: 8px; max-height: 40vh; overflow-y: auto; padding-right: 4px; }
+    .bubble {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      background: var(--vscode-editor-background);
+      box-shadow: 0 1px 0 rgba(0,0,0,0.05);
     }
-    
-    .empty-state {
-      text-align: center;
-      padding: 24px;
-      color: var(--vscode-descriptionForeground);
-    }
-    
-    .empty-state-icon {
-      font-size: 32px;
-      margin-bottom: 12px;
-    }
-    
-    .history-list {
-      list-style: none;
-    }
-    
-    .history-item {
-      padding: 8px;
-      border-radius: 4px;
-      cursor: pointer;
-      margin-bottom: 4px;
-      border: 1px solid transparent;
-    }
-    
-    .history-item:hover {
-      background: var(--vscode-list-hoverBackground);
-      border-color: var(--vscode-panel-border);
-    }
-    
-    .history-item-code {
+    .bubble.user { border-color: color-mix(in srgb, var(--accent) 60%, var(--border)); }
+    .bubble.assistant { background: color-mix(in srgb, var(--card) 85%, var(--accent) 5%); }
+    .bubble .meta { color: var(--muted); font-size: 11px; margin-bottom: 4px; display: flex; gap: 6px; align-items: center; }
+    .bubble .content { white-space: pre-wrap; word-break: break-word; }
+    .composer { display: flex; flex-direction: column; gap: 8px; }
+    .composer textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
       font-family: var(--vscode-editor-font-family);
-      font-size: 11px;
-      color: var(--vscode-descriptionForeground);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      background: var(--vscode-editor-background);
+      resize: vertical;
+      min-height: 64px;
+      color: var(--vscode-foreground);
     }
-    
-    .history-item-meta {
-      font-size: 10px;
-      color: var(--vscode-descriptionForeground);
-      margin-top: 2px;
+    .composer-row { display: flex; gap: 8px; align-items: flex-start; }
+    .composer-row button { height: 38px; }
+    .chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      font-size: 12px;
     }
-    
-    .collapsible {
-      cursor: pointer;
-      user-select: none;
-    }
-    
-    .collapsible::before {
-      content: "\u25B6";
-      display: inline-block;
-      margin-right: 6px;
-      font-size: 10px;
-      transition: transform 0.2s;
-    }
-    
-    .collapsible.open::before {
-      transform: rotate(90deg);
-    }
-    
-    .collapsible-content {
-      display: none;
-      margin-top: 8px;
-    }
-    
-    .collapsible.open + .collapsible-content {
-      display: block;
-    }
+    .hint { color: var(--muted); font-size: 12px; }
+    .empty { text-align: center; color: var(--muted); padding: 16px; }
+    .history-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+    .history-item { cursor: pointer; padding: 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--vscode-editor-background); }
+    .history-item:hover { border-color: var(--accent); }
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1>\u{1F9E0} ghia-ai</h1>
-    <button class="btn btn-primary" onclick="explainSelection()">Explain Selection</button>
-  </div>
-  
-  <div id="content">
-    <div class="empty-state">
-      <div class="empty-state-icon">\u{1F4A1}</div>
-      <p>Select code and click "Explain Selection"<br>or use the keyboard shortcut.</p>
+  <div class="panel">
+    <div class="header">
+      <div class="title">
+        <div class="title-row">
+          <span class="pill">Panel</span>
+          <h1>\u{1F9E0} ghia-ai</h1>
+        </div>
+        <div class="subtitle">Ask, explain, and keep context pinned like a sidekick.</div>
+      </div>
+      <div class="header-actions">
+        <button class="btn ghost" onclick="refreshExplanation()" id="refresh-btn">Refresh</button>
+        <button class="btn primary" onclick="explainSelection()">Explain Selection</button>
+      </div>
     </div>
-  </div>
-  
-  <div class="section" id="history-section" style="display: none;">
-    <h3 class="section-title collapsible" onclick="toggleHistory()">Recent Explanations</h3>
-    <div class="collapsible-content" id="history-content">
+
+    <div class="section" id="live-section">
+      <div class="section-title">
+        <span>Current</span>
+        <span class="muted" id="live-hint"></span>
+      </div>
+      <div id="live-card" class="card empty">Select code or ask a question to start.</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">
+        <span>Conversation</span>
+        <button class="btn ghost" onclick="clearHistory()" style="font-size:11px; padding:4px 8px;">Clear</button>
+      </div>
+      <div id="chat-stream" class="chat-stream"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">
+        <span>Ask Anything</span>
+        <span class="muted" id="busy-indicator"></span>
+      </div>
+      <form id="composer" class="composer">
+        <div class="chips">
+          <label class="chip">
+            <input type="checkbox" id="include-selection"> Selection
+          </label>
+          <label class="chip">
+            <input type="checkbox" id="include-file" checked> Current file
+          </label>
+          <span class="hint" id="context-hint"></span>
+        </div>
+        <div class="composer-row">
+          <textarea id="question" rows="3" placeholder="Ask about this code, a bug, or a concept\u2026"></textarea>
+          <button type="submit" class="btn primary" id="send-btn">Send</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="section" id="history-section" style="display:none;">
+      <div class="section-title" onclick="toggleHistory()" style="cursor:pointer;">
+        <span>Recent Explanations</span>
+        <span class="muted">Tap to load</span>
+      </div>
       <ul class="history-list" id="history-list"></ul>
-      <button class="btn" onclick="clearHistory()" style="margin-top: 8px;">Clear History</button>
     </div>
   </div>
-  
+
   <script>
     const vscode = acquireVsCodeApi();
-    
-    function explainSelection() {
-      vscode.postMessage({ command: 'explainSelection' });
-    }
-    
-    function copyExplanation() {
-      vscode.postMessage({ command: 'copy' });
-    }
-    
-    function refreshExplanation() {
-      vscode.postMessage({ command: 'refresh' });
-    }
-    
-    function loadHistory(id) {
-      vscode.postMessage({ command: 'loadHistory', id });
-    }
-    
-    function clearHistory() {
-      vscode.postMessage({ command: 'clearHistory' });
-    }
-    
+    let latestContextHints = { hasSelection: false, selectionLabel: null, hasFile: false, fileName: null };
+
+    document.getElementById('composer').addEventListener('submit', (event) => {
+      event.preventDefault();
+      const question = document.getElementById('question').value;
+      const includeSelection = document.getElementById('include-selection').checked;
+      const includeFile = document.getElementById('include-file').checked;
+      vscode.postMessage({ command: 'ask', question, includeSelection, includeFile });
+      document.getElementById('question').value = '';
+    });
+
+    function explainSelection() { vscode.postMessage({ command: 'explainSelection' }); }
+    function copyExplanation() { vscode.postMessage({ command: 'copy' }); }
+    function refreshExplanation() { vscode.postMessage({ command: 'refresh' }); }
+    function loadHistory(id) { vscode.postMessage({ command: 'loadHistory', id }); }
+    function clearHistory() { vscode.postMessage({ command: 'clearHistory' }); }
     function toggleHistory() {
-      const el = document.querySelector('#history-section .section-title');
-      el.classList.toggle('open');
+      const section = document.getElementById('history-section');
+      section.classList.toggle('open');
     }
-    
+
     function escapeHtml(text) {
       const div = document.createElement('div');
-      div.textContent = text;
+      div.textContent = text ?? '';
       return div.innerHTML;
     }
-    
+
     function formatTime(timestamp) {
       const date = new Date(timestamp);
       return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
-    
+
+    function renderExplanation(explanation) {
+      const liveCard = document.getElementById('live-card');
+      const hint = document.getElementById('live-hint');
+      if (!explanation || (!explanation.explanation && !explanation.isLoading)) {
+        liveCard.className = 'card empty';
+        liveCard.innerHTML = 'Select code or ask a question to start.';
+        hint.textContent = '';
+        return;
+      }
+
+      if (explanation.isLoading) {
+        liveCard.className = 'card';
+        liveCard.innerHTML = \`
+          <div class="actions" style="align-items:center;">
+            <div class="spinner"></div>
+            <span>Generating explanation\u2026</span>
+          </div>\`;
+        hint.textContent = 'Working';
+        return;
+      }
+
+      const codePreview = explanation.code
+        ? \`<div class="code-preview">\${escapeHtml(explanation.code)}</div>\`
+        : '';
+
+      liveCard.className = 'card';
+      liveCard.innerHTML = \`
+        <div class="explanation-text">\${escapeHtml(explanation.explanation)}</div>
+        \${codePreview}
+        <div class="actions">
+          <button class="btn" onclick="copyExplanation()">\u{1F4CB} Copy</button>
+          <button class="btn" onclick="refreshExplanation()">\u{1F504} Refresh</button>
+        </div>
+      \`;
+      hint.textContent = explanation.languageId ? explanation.languageId : '';
+    }
+
+    function renderConversation(conversation) {
+      const stream = document.getElementById('chat-stream');
+      if (!conversation || conversation.length === 0) {
+        stream.innerHTML = '<div class="empty">No chat yet. Ask a question or explain a selection to start a thread.</div>';
+        return;
+      }
+      stream.innerHTML = conversation.map(entry => {
+        const meta = \`\${entry.kind === 'ask' ? 'Ask' : 'Explain'} \u2022 \${formatTime(entry.timestamp)}\`;
+        const status = entry.pending ? ' (thinking\u2026)' : '';
+        return \`
+          <div class="bubble \${entry.role}">
+            <div class="meta">\${meta}\${status}</div>
+            <div class="content">\${escapeHtml(entry.content)}</div>
+          </div>
+        \`;
+      }).join('');
+      stream.scrollTop = stream.scrollHeight;
+    }
+
+    function renderHistory(history) {
+      const section = document.getElementById('history-section');
+      const list = document.getElementById('history-list');
+      if (!history || history.length === 0) {
+        section.style.display = 'none';
+        return;
+      }
+      section.style.display = 'block';
+      list.innerHTML = history.map(entry => \`
+        <li class="history-item" onclick="loadHistory('\${entry.id}')">
+          <div><strong>\${escapeHtml(entry.fileName)}</strong> \xB7 \${entry.lineNumber}</div>
+          <div class="muted">\${escapeHtml(entry.code.substring(0, 80))}</div>
+          <div class="muted">\${formatTime(entry.timestamp)}</div>
+        </li>
+      \`).join('');
+    }
+
+    function renderContextHints(hints) {
+      latestContextHints = hints || latestContextHints;
+      const selectionBox = document.getElementById('include-selection');
+      const fileBox = document.getElementById('include-file');
+      selectionBox.disabled = !latestContextHints.hasSelection;
+      if (!latestContextHints.hasSelection) selectionBox.checked = false;
+      document.getElementById('context-hint').textContent = latestContextHints.selectionLabel || latestContextHints.fileName || '';
+      document.getElementById('refresh-btn').style.display = 'inline-flex';
+      fileBox.disabled = !latestContextHints.hasFile;
+      if (!latestContextHints.hasFile) fileBox.checked = false;
+    }
+
+    function setBusy(isBusy) {
+      document.getElementById('send-btn').disabled = isBusy;
+      document.getElementById('busy-indicator').textContent = isBusy ? 'Working\u2026' : '';
+    }
+
     window.addEventListener('message', event => {
       const message = event.data;
-      
       if (message.type === 'update') {
-        const { explanation, history } = message;
-        const content = document.getElementById('content');
-        const historySection = document.getElementById('history-section');
-        const historyList = document.getElementById('history-list');
-        
-        if (explanation && (explanation.explanation || explanation.isLoading)) {
-          if (explanation.isLoading) {
-            content.innerHTML = \`
-              <div class="explanation-card">
-                <div class="loading">
-                  <div class="spinner"></div>
-                  <span>Generating explanation...</span>
-                </div>
-              </div>
-            \`;
-          } else {
-            const codePreview = explanation.code 
-              ? \`<div class="code-preview">\${escapeHtml(explanation.code)}</div>\`
-              : '';
-            
-            content.innerHTML = \`
-              <div class="explanation-card">
-                <div class="explanation-text">\${escapeHtml(explanation.explanation)}</div>
-                \${codePreview}
-                <div class="actions">
-                  <button class="btn" onclick="copyExplanation()">\u{1F4CB} Copy</button>
-                  <button class="btn" onclick="refreshExplanation()">\u{1F504} Refresh</button>
-                </div>
-              </div>
-            \`;
-          }
-        }
-        
-        if (history && history.length > 0) {
-          historySection.style.display = 'block';
-          historyList.innerHTML = history.map(entry => \`
-            <li class="history-item" onclick="loadHistory('\${entry.id}')">
-              <div class="history-item-code">\${escapeHtml(entry.code.substring(0, 60))}</div>
-              <div class="history-item-meta">\${entry.fileName}:\${entry.lineNumber} \u2022 \${formatTime(entry.timestamp)}</div>
-            </li>
-          \`).join('');
-        } else {
-          historySection.style.display = 'none';
-        }
+        renderExplanation(message.explanation);
+        renderConversation(message.conversation);
+        renderHistory(message.history);
+        renderContextHints(message.contextHints);
+        setBusy(!!message.busy);
       }
     });
   </script>
@@ -27671,6 +27849,17 @@ var FloatingPanelProvider = class {
   contextExtractor = new ContextExtractor();
   panel = null;
   disposables = [];
+  // In-panel chat history for context across questions
+  conversation = [];
+  /**
+   * Opens an empty ghia-ai panel to the right, sized evenly with the editor.
+   * Useful for pre-opening the space before asking a question.
+   */
+  openPanel() {
+    this.ensurePanel();
+    this.panel.webview.html = this.getWelcomeHtml();
+    this.evenEditorWidths();
+  }
   /**
    * Shows explanation in a floating webview panel beside the editor.
    */
@@ -27699,36 +27888,9 @@ var FloatingPanelProvider = class {
       vscode9.window.showWarningMessage("No code selected");
       return;
     }
-    if (this.panel) {
-      this.panel.reveal(vscode9.ViewColumn.Beside);
-    } else {
-      this.panel = vscode9.window.createWebviewPanel(
-        "ghia-ai.floatingPanel",
-        "\u{1F9E0} ghia-ai",
-        vscode9.ViewColumn.Beside,
-        {
-          enableScripts: true,
-          retainContextWhenHidden: true
-        }
-      );
-      this.panel.onDidDispose(
-        () => {
-          this.panel = null;
-        },
-        null,
-        this.disposables
-      );
-      this.panel.webview.onDidReceiveMessage(
-        async (message) => {
-          if (message.command === "copy" && message.text) {
-            await vscode9.env.clipboard.writeText(message.text);
-            vscode9.window.showInformationMessage("Copied to clipboard");
-          }
-        },
-        null,
-        this.disposables
-      );
-    }
+    this.ensurePanel();
+    this.panel.reveal(vscode9.ViewColumn.Beside);
+    this.evenEditorWidths();
     this.panel.webview.html = this.getLoadingHtml(code);
     const languageId = editor?.document.languageId ?? "plaintext";
     let explanation = this.cacheService.get(code);
@@ -27745,6 +27907,220 @@ var FloatingPanelProvider = class {
       }
     }
     this.panel.webview.html = this.getResultHtml(code, explanation, languageId);
+  }
+  ensurePanel() {
+    if (this.panel) {
+      this.panel.reveal(vscode9.ViewColumn.Beside);
+      return;
+    }
+    this.panel = vscode9.window.createWebviewPanel(
+      "ghia-ai.floatingPanel",
+      "\u{1F9E0} ghia-ai",
+      vscode9.ViewColumn.Beside,
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true
+      }
+    );
+    this.panel.onDidDispose(
+      () => {
+        this.panel = null;
+      },
+      null,
+      this.disposables
+    );
+    this.panel.webview.onDidReceiveMessage(
+      async (message) => {
+        if (message.command === "copy" && message.text) {
+          await vscode9.env.clipboard.writeText(message.text);
+          vscode9.window.showInformationMessage("Copied to clipboard");
+        } else if (message.command === "ask" && typeof message.text === "string") {
+          await this.handleAsk(message.text, {
+            includeSelection: Boolean(message.includeSelection),
+            includeFile: Boolean(message.includeFile)
+          });
+        } else if (message.command === "clear") {
+          this.conversation = [];
+          this.panel.webview.html = this.renderChatHtml();
+        }
+      },
+      null,
+      this.disposables
+    );
+  }
+  evenEditorWidths() {
+    void vscode9.commands.executeCommand("workbench.action.evenEditorWidths");
+  }
+  getWelcomeHtml() {
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-editor-background); padding: 1.5rem; line-height: 1.6; }
+    h1 { margin: 0 0 0.25rem; }
+    p { margin: 0 0 1rem; }
+    code { background: var(--vscode-editorWidget-background); padding: 0.15rem 0.3rem; border-radius: 4px; }
+    .chips { display: flex; gap: 8px; align-items: center; margin: 0 0 0.5rem; }
+    .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 999px; border: 1px solid var(--vscode-input-border); background: var(--vscode-editorWidget-background); font-size: 12px; }
+    textarea { width: 100%; box-sizing: border-box; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 6px; padding: 8px; font-family: var(--vscode-editor-font-family); resize: vertical; }
+    button { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: 1px solid var(--vscode-button-border); padding: 8px 12px; border-radius: 6px; cursor: pointer; }
+    button:hover { background: var(--vscode-button-hoverBackground); }
+    .row { display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+  </style>
+</head>
+<body>
+  <h1>\u{1F9E0} ghia-ai</h1>
+  <p>Ask a question or select code, then click Send.</p>
+  <form id="ask-form">
+    <div class="chips">
+      <label class="chip"><input type="checkbox" id="include-selection" checked> Selection</label>
+      <label class="chip"><input type="checkbox" id="include-file" checked> Current file</label>
+    </div>
+    <textarea id="ask-input" rows="4" placeholder="How does this function work? What is causing this bug?"></textarea>
+    <div class="row">
+      <span style="color: var(--vscode-descriptionForeground); font-size: 12px;">Answers render here in this wide panel.</span>
+      <button type="submit">Send</button>
+    </div>
+  </form>
+
+  <script>
+    const vscode = acquireVsCodeApi();
+    document.getElementById('ask-form').addEventListener('submit', (event) => {
+      event.preventDefault();
+      const text = document.getElementById('ask-input').value;
+      const includeSelection = document.getElementById('include-selection').checked;
+      const includeFile = document.getElementById('include-file').checked;
+      vscode.postMessage({ command: 'ask', text, includeSelection, includeFile });
+    });
+  </script>
+</body>
+</html>`;
+  }
+  renderChatHtml(showTyping = false) {
+    const messagesHtml = this.conversation.map((m) => {
+      const cls = m.role === "user" ? "bubble user" : "bubble ai";
+      return `<div class="${cls}">${this.markdownToHtml(m.content)}</div>`;
+    }).join("");
+    const typingHtml = showTyping ? `<div class="typing">Thinking ${this.randomEmoji()}</div>` : "";
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { margin:0; padding:16px; font-family: var(--vscode-font-family); background: var(--vscode-editor-background); color: var(--vscode-foreground); }
+    h1 { margin: 0 0 8px; display:flex; gap:8px; align-items:center; }
+    .chat { display:flex; flex-direction:column; gap:10px; margin: 12px 0 16px; }
+    .bubble { padding:10px 12px; border-radius:10px; border:1px solid var(--vscode-panel-border); }
+    .bubble.user { background: var(--vscode-textBlockQuote-background); }
+    .bubble.ai { background: var(--vscode-editorWidget-background); }
+    .typing { font-size: 12px; color: var(--vscode-descriptionForeground); }
+    .composer { display:flex; flex-direction:column; gap:8px; }
+    .chips { display:flex; gap:8px; flex-wrap:wrap; }
+    .chip { display:inline-flex; gap:6px; align-items:center; padding:4px 8px; border-radius:999px; border:1px solid var(--vscode-input-border); background: var(--vscode-editorWidget-background); font-size:12px; }
+    textarea { width:100%; box-sizing:border-box; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border:1px solid var(--vscode-input-border); border-radius:6px; padding:8px; font-family: var(--vscode-editor-font-family); }
+    button { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border:1px solid var(--vscode-button-border); padding:8px 12px; border-radius:6px; cursor:pointer; }
+    button:hover { background: var(--vscode-button-hoverBackground); }
+    .actions { display:flex; gap:8px; align-items:center; }
+  </style>
+</head>
+<body>
+  <h1>\u{1F9E0} ghia-ai</h1>
+  <div class="chat" id="chat">${messagesHtml}${typingHtml}</div>
+  <form id="ask-form" class="composer">
+    <div class="chips">
+      <label class="chip"><input type="checkbox" id="include-selection" checked> Selection</label>
+      <label class="chip"><input type="checkbox" id="include-file" checked> Current file</label>
+    </div>
+    <textarea id="ask-input" rows="3" placeholder="Ask a follow-up or a new question"></textarea>
+    <div class="actions">
+      <button type="submit">Send</button>
+      <button type="button" id="clear-btn">Clear</button>
+    </div>
+  </form>
+
+  <script>
+    const vscode = acquireVsCodeApi();
+    const form = document.getElementById('ask-form');
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const text = document.getElementById('ask-input').value;
+      const includeSelection = document.getElementById('include-selection').checked;
+      const includeFile = document.getElementById('include-file').checked;
+      vscode.postMessage({ command: 'ask', text, includeSelection, includeFile });
+      document.getElementById('ask-input').value = '';
+    });
+    document.getElementById('clear-btn').addEventListener('click', () => {
+      vscode.postMessage({ command: 'clear' });
+    });
+  </script>
+</body>
+</html>`;
+  }
+  async handleAsk(question, opts) {
+    if (!question || !question.trim()) {
+      vscode9.window.showWarningMessage("Enter a question to ask ghia-ai.");
+      return;
+    }
+    const editor = vscode9.window.activeTextEditor;
+    const doc = editor?.document;
+    const selectionText = opts.includeSelection && editor && !editor.selection.isEmpty ? editor.document.getText(editor.selection).trim() : "";
+    const includeFile = opts.includeFile && doc;
+    const contextInfo = includeFile && doc ? (() => {
+      const MAX_CHARS = 3e4;
+      const full = doc.getText();
+      const truncated = full.length > MAX_CHARS;
+      return {
+        languageId: doc.languageId,
+        content: truncated ? full.slice(0, MAX_CHARS) : full,
+        truncated
+      };
+    })() : void 0;
+    const augmentedQuestion = selectionText.length > 0 ? `${question.trim()}
+
+Selected code:
+${selectionText}` : question.trim();
+    if (!this.panel) {
+      this.ensurePanel();
+    }
+    this.conversation.push({ role: "user", content: augmentedQuestion });
+    this.conversation.push({ role: "assistant", content: "\u2026thinking" });
+    this.panel.webview.html = this.renderChatHtml(true);
+    try {
+      const historyContext = this.buildHistoryContext();
+      const answer = await this.aiService.ask(
+        `${historyContext}
+Current question: ${augmentedQuestion}`,
+        contextInfo
+      );
+      if (this.conversation.length > 0 && this.conversation[this.conversation.length - 1].role === "assistant" && this.conversation[this.conversation.length - 1].content.startsWith("\u2026")) {
+        this.conversation.pop();
+      }
+      this.conversation.push({ role: "assistant", content: answer });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (this.conversation.length > 0 && this.conversation[this.conversation.length - 1].role === "assistant" && this.conversation[this.conversation.length - 1].content.startsWith("\u2026")) {
+        this.conversation.pop();
+      }
+      this.conversation.push({
+        role: "assistant",
+        content: `Error: ${message}`
+      });
+    }
+    this.panel.webview.html = this.renderChatHtml();
+  }
+  buildHistoryContext() {
+    const recent = this.conversation.slice(-6);
+    const lines = recent.map(
+      (m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`
+    );
+    return lines.length ? `Previous conversation:
+${lines.join("\n")}
+` : "";
+  }
+  randomEmoji() {
+    const emojis = ["\u{1F916}", "\u2728", "\u26A1", "\u{1F9E0}", "\u{1F680}", "\u{1F4A1}", "\u{1F300}", "\u{1F3AF}", "\u{1F4DA}", "\u{1F9E9}"];
+    return emojis[Math.floor(Math.random() * emojis.length)];
   }
   getLoadingHtml(code) {
     return `<!DOCTYPE html>
@@ -27790,14 +28166,25 @@ var FloatingPanelProvider = class {
   <h2>\u{1F9E0} ghia-ai</h2>
   <div class="loading">
     <div class="spinner"></div>
-    <span>Generating explanation...</span>
+    <span id="loading-text">Generating explanation...</span>
   </div>
   <h3>Code</h3>
   <pre class="code-preview">${this.escapeHtml(code)}</pre>
+
+  <script>
+    const emojis = ["\u{1F916}","\u2728","\u26A1","\u{1F9E0}","\u{1F680}","\u{1F4A1}","\u{1F300}","\u{1F3AF}","\u{1F4DA}","\u{1F9E9}"];
+    const textEl = document.getElementById('loading-text');
+    let i = 0;
+    setInterval(() => {
+      textEl.textContent = "Generating " + emojis[i % emojis.length];
+      i++;
+    }, 600);
+  </script>
 </body>
 </html>`;
   }
   getResultHtml(code, explanation, languageId) {
+    const rendered = this.markdownToHtml(explanation);
     const rawExplanationJson = JSON.stringify(explanation);
     return `<!DOCTYPE html>
 <html>
@@ -27822,6 +28209,19 @@ var FloatingPanelProvider = class {
       padding: 16px;
       margin: 16px 0;
       border-radius: 0 4px 4px 0;
+    }
+    .explanation h2, .explanation h3, .explanation h4 { margin: 0.5em 0 0.25em; }
+    .explanation p { margin: 0 0 0.6em; }
+    .code-block {
+      background: var(--vscode-editor-background);
+      border: 1px solid var(--vscode-panel-border);
+      padding: 10px;
+      border-radius: 6px;
+      font-family: var(--vscode-editor-font-family);
+      font-size: 12px;
+      overflow-x: auto;
+      white-space: pre;
+      margin: 10px 0;
     }
     .code-preview {
       background: var(--vscode-editor-background);
@@ -27857,7 +28257,7 @@ var FloatingPanelProvider = class {
 <body>
   <h2>\u{1F9E0} ghia-ai</h2>
   
-  <div class="explanation">${this.escapeHtml(explanation)}</div>
+  <div class="explanation" id="explanation">${rendered}</div>
   
   <button class="btn" onclick="copyExplanation()">\u{1F4CB} Copy Explanation</button>
   
@@ -27868,7 +28268,6 @@ var FloatingPanelProvider = class {
   
   <script>
     const vscode = acquireVsCodeApi();
-    // Store raw explanation in JS variable to avoid HTML-escaping issues when copying
     const rawExplanation = ${rawExplanationJson};
     
     function copyExplanation() {
@@ -27880,6 +28279,28 @@ var FloatingPanelProvider = class {
   }
   escapeHtml(text) {
     return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+  markdownToHtml(md) {
+    const codeBlocks = [];
+    md = md.replace(/```([\s\S]*?)```/g, (_m, code) => {
+      const idx = codeBlocks.push(
+        `<pre class="code-block"><code>${this.escapeHtml(
+          String(code).trim()
+        )}</code></pre>`
+      );
+      return `__CODE_BLOCK_${idx - 1}__`;
+    });
+    let html = this.escapeHtml(md);
+    html = html.replace(/^###\s+(.*)$/gm, "<h3>$1</h3>");
+    html = html.replace(/^##\s+(.*)$/gm, "<h2>$1</h2>");
+    html = html.replace(/^#\s+(.*)$/gm, "<h1>$1</h1>");
+    html = html.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+    html = html.replace(/\*(.*?)\*/g, "<em>$1</em>");
+    html = html.replace(/^\*\s+(.*)$/gm, "<ul><li>$1</li></ul>");
+    html = html.replace(/\n{2,}/g, "</p><p>");
+    html = `<p>${html}</p>`;
+    html = html.replace(/__CODE_BLOCK_(\d+)__/g, (_m, i) => codeBlocks[Number(i)] ?? "");
+    return html;
   }
   dispose() {
     this.panel?.dispose();
@@ -27893,7 +28314,7 @@ var PrototypeManager = class {
     this.context = context;
     void vscode10.commands.executeCommand(
       "setContext",
-      "codelensAI.prototype.sidePanelEnabled",
+      "ghiaAI.prototype.sidePanelEnabled",
       true
     );
     this.statusBarItem = vscode10.window.createStatusBarItem(
@@ -27907,7 +28328,7 @@ var PrototypeManager = class {
     this.loadConfiguration();
     this.disposables.push(
       vscode10.workspace.onDidChangeConfiguration((e) => {
-        if (e.affectsConfiguration("codelensAI.prototype")) {
+        if (e.affectsConfiguration("ghiaAI.prototype")) {
           this.loadConfiguration();
         }
       })
@@ -27957,7 +28378,7 @@ var PrototypeManager = class {
    * Registers all commands for the prototype manager.
    */
   registerCommands() {
-    const commands7 = [
+    const commands8 = [
       // Mode selection
       vscode10.commands.registerCommand(
         "ghia-ai.prototype.selectMode",
@@ -28001,20 +28422,24 @@ var PrototypeManager = class {
         "ghia-ai.explainFloating",
         (code, context) => this.floatingPanelProvider?.showExplanation(code, context)
       ),
+      vscode10.commands.registerCommand(
+        "ghia-ai.openWidePanel",
+        () => this.floatingPanelProvider?.openPanel()
+      ),
       // Toggle commands
       vscode10.commands.registerCommand(
         "ghia-ai.prototype.toggleCodeLens",
         () => this.toggleCodeLens()
       )
     ];
-    this.disposables.push(...commands7);
+    this.disposables.push(...commands8);
   }
   /**
    * Loads configuration and applies the active mode.
    * Only reads config - does not write back to avoid recursive change events.
    */
   loadConfiguration() {
-    const config = vscode10.workspace.getConfiguration("codelensAI.prototype");
+    const config = vscode10.workspace.getConfiguration("ghiaAI.prototype");
     const mode = config.get("mode", "hover");
     this.applyMode(mode);
   }
@@ -28096,7 +28521,7 @@ var PrototypeManager = class {
    * Call this for user-initiated mode changes only.
    */
   async setMode(mode) {
-    const config = vscode10.workspace.getConfiguration("codelensAI.prototype");
+    const config = vscode10.workspace.getConfiguration("ghiaAI.prototype");
     const storedMode = config.get("mode");
     this.applyMode(mode);
     if (storedMode !== mode) {
@@ -28622,6 +29047,7 @@ var prototypeManager;
 var hoverRegistrationDisposable;
 var aiService = new AIService();
 var askStatusBar;
+var panelStatusBar;
 function activate(context) {
   const hoverProvider = new CodeLensHoverProvider();
   const sm = new StateManager(context);
@@ -28658,7 +29084,7 @@ function activate(context) {
   sbm.registerClickHandler(context);
   sbm.show();
   const commandDisposable = vscode13.commands.registerCommand(
-    "helper-ai.explainCode",
+    "ghia-ai.explainCode",
     (codeOrArgs, ctx) => {
       let code;
       let context2;
@@ -28674,7 +29100,7 @@ function activate(context) {
   );
   context.subscriptions.push(commandDisposable);
   const retryHoverCommandDisposable = vscode13.commands.registerCommand(
-    "helper-ai.retryHoverExplanation",
+    "ghia-ai.retryHoverExplanation",
     (code, context2) => {
       hoverProvider.retryExplanation(code ?? "", context2 ?? "");
     }
@@ -28682,7 +29108,7 @@ function activate(context) {
   context.subscriptions.push(retryHoverCommandDisposable);
   const welcomeSubscription = vscode13.workspace.onDidOpenTextDocument(() => {
     if (sm.hasShownWelcome()) return;
-    const message = "\u{1F44B} Welcome to helper-ai! Click the icon in the status bar to configure your local Ollama model and get started.";
+    const message = "\u{1F44B} Welcome to ghia-ai! Click the icon in the status bar to configure your local Ollama model and get started.";
     void vscode13.window.showInformationMessage(message, "Configure Now").then((selection) => {
       void sm.markWelcomeShown();
       if (selection === "Configure Now") {
@@ -28692,7 +29118,7 @@ function activate(context) {
   });
   context.subscriptions.push(welcomeSubscription);
   const askCommand = vscode13.commands.registerCommand(
-    "helper-ai.askAI",
+    "ghia-ai.askAI",
     async () => {
       const question = await vscode13.window.showInputBox({
         prompt: "Ask your local model a question",
@@ -28718,15 +29144,15 @@ function activate(context) {
         const answer = await vscode13.window.withProgress(
           {
             location: vscode13.ProgressLocation.Notification,
-            title: "helper-ai",
+            title: "ghia-ai",
             cancellable: false
           },
           () => aiService.ask(question, contextInfo)
         );
-        showAnswerPanel(answer, `helper-ai: ${question}`);
+        showAnswerPanel(answer, `ghia-ai: ${question}`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        void vscode13.window.showErrorMessage(`helper-ai: ${msg}`);
+        void vscode13.window.showErrorMessage(`ghia-ai: ${msg}`);
       }
     }
   );
@@ -28737,20 +29163,29 @@ function activate(context) {
   );
   askStatusBar.text = "$(comment-discussion) Ask AI";
   askStatusBar.tooltip = "Ask your local model (Python 3 examples)";
-  askStatusBar.command = "helper-ai.askAI";
+  askStatusBar.command = "ghia-ai.askAI";
   askStatusBar.show();
   context.subscriptions.push(askStatusBar);
-  const config = vscode13.workspace.getConfiguration("codelensAI");
+  panelStatusBar = vscode13.window.createStatusBarItem(
+    vscode13.StatusBarAlignment.Right,
+    88
+  );
+  panelStatusBar.text = "$(layout-sidebar-right) ghia-ai";
+  panelStatusBar.tooltip = "Open the ghia-ai side panel";
+  panelStatusBar.command = "ghia-ai.openPanel";
+  panelStatusBar.show();
+  context.subscriptions.push(panelStatusBar);
+  const config = vscode13.workspace.getConfiguration("ghiaAI");
   const experimentsEnabled = config.get("enableExperiments", false);
   if (experimentsEnabled) {
     activateExperiments(context);
   }
-  const experimentDisabledMessage = 'Experiments are disabled. Enable them in settings: "codelensAI.enableExperiments": true';
+  const experimentDisabledMessage = 'Experiments are disabled. Enable them in settings: "ghiaAI.enableExperiments": true';
   function isExperimentsEnabled() {
-    return vscode13.workspace.getConfiguration("codelensAI").get("enableExperiments", false);
+    return vscode13.workspace.getConfiguration("ghiaAI").get("enableExperiments", false);
   }
   const experimentMenuCommand = vscode13.commands.registerCommand(
-    "helper-ai.experiment.menu",
+    "ghia-ai.experiment.menu",
     () => {
       if (!isExperimentsEnabled()) {
         void vscode13.window.showInformationMessage(experimentDisabledMessage);
@@ -28760,7 +29195,7 @@ function activate(context) {
     }
   );
   const experimentStopCommand = vscode13.commands.registerCommand(
-    "helper-ai.experiment.stop",
+    "ghia-ai.experiment.stop",
     () => {
       if (!isExperimentsEnabled()) {
         void vscode13.window.showInformationMessage(experimentDisabledMessage);
@@ -28771,7 +29206,7 @@ function activate(context) {
     }
   );
   const experimentStatusCommand = vscode13.commands.registerCommand(
-    "helper-ai.experiment.status",
+    "ghia-ai.experiment.status",
     () => {
       if (!isExperimentsEnabled()) {
         void vscode13.window.showInformationMessage(experimentDisabledMessage);
@@ -28794,7 +29229,7 @@ function activate(context) {
   ];
   const experimentRunCommands = experimentModes.map(
     (mode) => vscode13.commands.registerCommand(
-      `helper-ai.experiment.run.${mode}`,
+      `ghia-ai.experiment.run.${mode}`,
       () => {
         if (!isExperimentsEnabled()) {
           void vscode13.window.showInformationMessage(experimentDisabledMessage);
@@ -28810,14 +29245,15 @@ function activate(context) {
     experimentStatusCommand,
     ...experimentRunCommands
   );
-  const prototypesEnabled = config.get(
-    "prototype.enablePrototypes",
-    true
+  prototypeManager = new PrototypeManager(context);
+  context.subscriptions.push(prototypeManager);
+  const openPanelCommand = vscode13.commands.registerCommand(
+    "ghia-ai.openPanel",
+    async () => {
+      await vscode13.commands.executeCommand("ghia-ai.openWidePanel");
+    }
   );
-  if (prototypesEnabled) {
-    prototypeManager = new PrototypeManager(context);
-    context.subscriptions.push(prototypeManager);
-  }
+  context.subscriptions.push(openPanelCommand);
 }
 function deactivate() {
   deactivateExperiments();
@@ -28835,10 +29271,12 @@ function deactivate() {
   stateManager = void 0;
   askStatusBar?.dispose();
   askStatusBar = void 0;
+  panelStatusBar?.dispose();
+  panelStatusBar = void 0;
 }
 function showAnswerPanel(markdown, title) {
   const panel = vscode13.window.createWebviewPanel(
-    "codelensAiAnswer",
+    "ghiaAiAnswer",
     title,
     vscode13.ViewColumn.Beside,
     { enableScripts: false }

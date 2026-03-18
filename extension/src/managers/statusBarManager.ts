@@ -9,7 +9,7 @@ const TOOLTIP_ENABLED = "ghia-ai - Click to configure";
 const TOOLTIP_DISABLED = "ghia-ai (disabled) - Click to enable";
 
 /**
- * Manages the CodeLens AI status bar item: icon (eye/eye-closed), tooltip, click-to-menu,
+ * Manages the ghia-ai status bar item: icon (eye/eye-closed), tooltip, click-to-menu,
  * and subscription to StateManager so the icon reflects enabled/disabled state.
  */
 export class StatusBarManager {

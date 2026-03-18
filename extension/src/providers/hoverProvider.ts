@@ -75,7 +75,7 @@ export class CodeLensHoverProvider
         }
       });
     this.configListener = vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration("codelensAI.highlightColor"))
+      if (e.affectsConfiguration("ghiaAI.highlightColor"))
         this.updateDecorationType();
     });
     this.themeListener = vscode.window.onDidChangeActiveColorTheme(() =>
@@ -111,7 +111,7 @@ export class CodeLensHoverProvider
 
   private getHighlightColor(): string {
     const custom = vscode.workspace
-      .getConfiguration("codelensAI")
+      .getConfiguration("ghiaAI")
       .get<string>("highlightColor");
     if (custom && custom.trim().length > 0) return custom.trim();
     const kind = vscode.window.activeColorTheme.kind;
@@ -322,7 +322,7 @@ export class CodeLensHoverProvider
       this.cacheService.set(code, explanation);
     } catch (err) {
       if (token?.isCancellationRequested) return;
-      console.error("[CodeLens AI] fetchExplanation failed", err);
+      console.error("[ghia-ai] fetchExplanation failed", err);
       const message = err instanceof Error ? err.message : String(err);
       this.cacheService.set(
         code,
@@ -543,7 +543,7 @@ export class CodeLensHoverProvider
       }
     }
     this.explanationPanel = vscode.window.createWebviewPanel(
-      "codelensAiExplain",
+      "ghiaAiExplain",
       title,
       vscode.ViewColumn.Beside,
       { enableScripts: false }

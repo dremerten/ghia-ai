@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { StateManager } from "./stateManager";
 
-const CONFIG_NS = "codelensAI";
+const CONFIG_NS = "ghiaAI";
 const ACTION_PREFIX = "action:";
 
 const DEFAULT_MODEL = "llama3";
@@ -33,7 +33,7 @@ export class MenuManager {
     this.configWatcherDisposable = vscode.workspace.onDidChangeConfiguration(
       (e) => {
         if (
-          e.affectsConfiguration("codelensAI") &&
+          e.affectsConfiguration("ghiaAI") &&
           this.quickPick &&
           (this.quickPick as { visible?: boolean }).visible
         ) {

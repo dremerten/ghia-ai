@@ -24,6 +24,7 @@ let prototypeManager: PrototypeManager | undefined;
 let hoverRegistrationDisposable: vscode.Disposable | undefined;
 const aiService = new AIService();
 let askStatusBar: vscode.StatusBarItem | undefined;
+let panelStatusBar: vscode.StatusBarItem | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
   const hoverProvider = new CodeLensHoverProvider();
@@ -68,7 +69,7 @@ export function activate(context: vscode.ExtensionContext): void {
   sbm.show();
 
   const commandDisposable = vscode.commands.registerCommand(
-    "helper-ai.explainCode",
+    "ghia-ai.explainCode",
     (codeOrArgs?: string | [string, string], ctx?: string) => {
       // Command URIs pass a single JSON array [code, context]; normalize to (code, context).
       let code: string | undefined;
@@ -90,7 +91,7 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(commandDisposable);
 
   const retryHoverCommandDisposable = vscode.commands.registerCommand(
-    "helper-ai.retryHoverExplanation",
+    "ghia-ai.retryHoverExplanation",
     (code?: string, context?: string) => {
       hoverProvider.retryExplanation(code ?? "", context ?? "");
     }
@@ -100,7 +101,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const welcomeSubscription = vscode.workspace.onDidOpenTextDocument(() => {
     if (sm.hasShownWelcome()) return;
     const message =
-      "👋 Welcome to helper-ai! Click the icon in the status bar to configure your local Ollama model and get started.";
+      "👋 Welcome to ghia-ai! Click the icon in the status bar to configure your local Ollama model and get started.";
     void vscode.window
       .showInformationMessage(message, "Configure Now")
       .then((selection) => {
@@ -113,7 +114,7 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(welcomeSubscription);
 
   const askCommand = vscode.commands.registerCommand(
-    "helper-ai.askAI",
+    "ghia-ai.askAI",
     async () => {
       const question = await vscode.window.showInputBox({
         prompt: "Ask your local model a question",
@@ -145,15 +146,15 @@ export function activate(context: vscode.ExtensionContext): void {
         const answer = await vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
-            title: "helper-ai",
+            title: "ghia-ai",
             cancellable: false,
           },
           () => aiService.ask(question, contextInfo)
         );
-        showAnswerPanel(answer, `helper-ai: ${question}`);
+        showAnswerPanel(answer, `ghia-ai: ${question}`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        void vscode.window.showErrorMessage(`helper-ai: ${msg}`);
+        void vscode.window.showErrorMessage(`ghia-ai: ${msg}`);
       }
     }
   );
@@ -166,13 +167,24 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   askStatusBar.text = "$(comment-discussion) Ask AI";
   askStatusBar.tooltip = "Ask your local model (Python 3 examples)";
-  askStatusBar.command = "helper-ai.askAI";
+  askStatusBar.command = "ghia-ai.askAI";
   askStatusBar.show();
   context.subscriptions.push(askStatusBar);
 
+  // Quick access to open the side panel
+  panelStatusBar = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Right,
+    88
+  );
+  panelStatusBar.text = "$(layout-sidebar-right) ghia-ai";
+  panelStatusBar.tooltip = "Open the ghia-ai side panel";
+  panelStatusBar.command = "ghia-ai.openPanel";
+  panelStatusBar.show();
+  context.subscriptions.push(panelStatusBar);
+
   // Only activate experiments UI (status bar) when explicitly enabled via configuration
   // This prevents the experimental status bar from showing to production users
-  const config = vscode.workspace.getConfiguration("codelensAI");
+  const config = vscode.workspace.getConfiguration("ghiaAI");
   const experimentsEnabled = config.get<boolean>("enableExperiments", false);
   if (experimentsEnabled) {
     activateExperiments(context);
@@ -181,16 +193,16 @@ export function activate(context: vscode.ExtensionContext): void {
   // Always register experiment commands so they don't cause "command not found" errors
   // Handlers check config at runtime and show info message if experiments are disabled
   const experimentDisabledMessage =
-    'Experiments are disabled. Enable them in settings: "codelensAI.enableExperiments": true';
+    'Experiments are disabled. Enable them in settings: "ghiaAI.enableExperiments": true';
 
   function isExperimentsEnabled(): boolean {
     return vscode.workspace
-      .getConfiguration("codelensAI")
+      .getConfiguration("ghiaAI")
       .get<boolean>("enableExperiments", false);
   }
 
   const experimentMenuCommand = vscode.commands.registerCommand(
-    "helper-ai.experiment.menu",
+    "ghia-ai.experiment.menu",
     () => {
       if (!isExperimentsEnabled()) {
         void vscode.window.showInformationMessage(experimentDisabledMessage);
@@ -201,7 +213,7 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   const experimentStopCommand = vscode.commands.registerCommand(
-    "helper-ai.experiment.stop",
+    "ghia-ai.experiment.stop",
     () => {
       if (!isExperimentsEnabled()) {
         void vscode.window.showInformationMessage(experimentDisabledMessage);
@@ -213,7 +225,7 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   const experimentStatusCommand = vscode.commands.registerCommand(
-    "helper-ai.experiment.status",
+    "ghia-ai.experiment.status",
     () => {
       if (!isExperimentsEnabled()) {
         void vscode.window.showInformationMessage(experimentDisabledMessage);
@@ -239,7 +251,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const experimentRunCommands = experimentModes.map((mode) =>
     vscode.commands.registerCommand(
-      `helper-ai.experiment.run.${mode}`,
+      `ghia-ai.experiment.run.${mode}`,
       () => {
         if (!isExperimentsEnabled()) {
           void vscode.window.showInformationMessage(experimentDisabledMessage);
@@ -257,16 +269,20 @@ export function activate(context: vscode.ExtensionContext): void {
     ...experimentRunCommands
   );
 
-  // Activate UI prototypes by default (Hybrid mode: CodeLens + Side Panel)
-  // User can explicitly disable via codelensAI.prototype.enablePrototypes = false
-  const prototypesEnabled = config.get<boolean>(
-    "prototype.enablePrototypes",
-    true
+  // Always register prototype UI (CodeLens/Side Panel/Floating)
+  // Users can still pick their preferred mode via settings or the mode selector.
+  prototypeManager = new PrototypeManager(context);
+  context.subscriptions.push(prototypeManager);
+
+  // One-click command to focus the ghia-ai side panel
+  const openPanelCommand = vscode.commands.registerCommand(
+    "ghia-ai.openPanel",
+    async () => {
+      // Delegate to the wide floating panel for a 50/50 split
+      await vscode.commands.executeCommand("ghia-ai.openWidePanel");
+    }
   );
-  if (prototypesEnabled) {
-    prototypeManager = new PrototypeManager(context);
-    context.subscriptions.push(prototypeManager);
-  }
+  context.subscriptions.push(openPanelCommand);
 }
 
 export function deactivate(): void {
@@ -285,11 +301,13 @@ export function deactivate(): void {
   stateManager = undefined;
   askStatusBar?.dispose();
   askStatusBar = undefined;
+  panelStatusBar?.dispose();
+  panelStatusBar = undefined;
 }
 
 function showAnswerPanel(markdown: string, title: string): void {
   const panel = vscode.window.createWebviewPanel(
-    "codelensAiAnswer",
+    "ghiaAiAnswer",
     title,
     vscode.ViewColumn.Beside,
     { enableScripts: false }

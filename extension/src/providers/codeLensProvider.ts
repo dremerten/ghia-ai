@@ -329,7 +329,7 @@ export class CodeLensExplainProvider
       }
     }
     this.explanationPanel = vscode.window.createWebviewPanel(
-      "codelensAiExplain",
+      "ghiaAiExplain",
       title,
       vscode.ViewColumn.Beside,
       { enableScripts: false }

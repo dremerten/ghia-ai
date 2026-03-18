@@ -63,6 +63,10 @@
         "title": "ghia-ai: Show Menu"
       },
       {
+        "command": "ghia-ai.openPanel",
+        "title": "ghia-ai: Open Side Panel"
+      },
+      {
         "command": "ghia-ai.prototype.selectMode",
         "title": "ghia-ai: Select UI Mode"
       },
@@ -81,6 +85,10 @@
       {
         "command": "ghia-ai.explainFloating",
         "title": "ghia-ai: Explain in Floating Panel"
+      },
+      {
+        "command": "ghia-ai.openWidePanel",
+        "title": "ghia-ai: Open Wide Panel"
       },
       {
         "command": "ghia-ai.prototype.toggleCodeLens",
@@ -149,7 +157,7 @@
           "type": "webview",
           "id": "ghia-ai.explanationPanel",
           "name": "ghia-ai",
-          "when": "codelensAI.prototype.sidePanelEnabled"
+          "when": "ghiaAI.prototype.sidePanelEnabled"
         }
       ]
     },
@@ -170,27 +178,27 @@
     "configuration": {
       "title": "ghia-ai",
       "properties": {
-        "codelensAI.ollamaEndpoint": {
+        "ghiaAI.ollamaEndpoint": {
           "type": "string",
           "default": "http://89.116.212.35:11434",
           "description": "Ollama API endpoint URL."
         },
-        "codelensAI.model": {
+        "ghiaAI.model": {
           "type": "string",
           "default": "gemma3:1b",
           "description": "Model name to use for explanations."
         },
-        "codelensAI.highlightColor": {
+        "ghiaAI.highlightColor": {
           "type": "string",
           "default": "",
           "description": "Background color for the hover-highlighted code block (e.g. \"rgba(0, 128, 128, 0.2)\"). Leave empty to use theme-aware defaults (dark: teal 15%, light: teal 25%, high-contrast: white 10%)."
         },
-        "codelensAI.enableExperiments": {
+        "ghiaAI.enableExperiments": {
           "type": "boolean",
           "default": false,
           "description": "Enable experimental hover provider testing module. Only enable for development/testing purposes."
         },
-        "codelensAI.prototype.mode": {
+        "ghiaAI.prototype.mode": {
           "type": "string",
           "enum": [
             "hover",
@@ -215,12 +223,12 @@
           ],
           "description": "UI mode for displaying AI explanations. Each mode offers different trade-offs."
         },
-        "codelensAI.prototype.sidePanelEnabled": {
+        "ghiaAI.prototype.sidePanelEnabled": {
           "type": "boolean",
           "default": true,
           "description": "Show the ghia-ai panel in the Explorer sidebar."
         },
-        "codelensAI.prototype.enablePrototypes": {
+        "ghiaAI.prototype.enablePrototypes": {
           "type": "boolean",
           "default": true,
           "description": "Enable UI prototype alternatives (CodeLens, Peek View, Side Panel). Set to false to disable alternative UI modes."

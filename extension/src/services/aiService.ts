@@ -46,7 +46,7 @@ export class AIService {
     : (undiciFetch as unknown as typeof fetch);
 
   private getConfig(): AIConfig {
-    const config = vscode.workspace.getConfiguration("codelensAI");
+    const config = vscode.workspace.getConfiguration("ghiaAI");
     const modelFromConfig = config.get("model");
     const model =
       typeof modelFromConfig === "string" && modelFromConfig.trim()
@@ -112,7 +112,7 @@ export class AIService {
         return "Request was cancelled.";
       }
       const message = `${this.analyzeError(err)} (model tried: ${model}, endpoint: ${cfg.ollamaEndpoint})`;
-      console.error("[CodeLens AI]", err);
+      console.error("[ghia-ai]", err);
       throw new Error(message);
     }
   }
@@ -264,7 +264,7 @@ export class AIService {
       if (status === 404) {
         const match = /model ['"]?([^'"]+)['"]? not found/i.exec(message);
         const modelName = match?.[1] ?? "the configured model";
-        return `Model "${modelName}" is not available on your Ollama instance. Run: ollama pull ${modelName}, or set "codelensAI.model" to a model you have.`;
+        return `Model "${modelName}" is not available on your Ollama instance. Run: ollama pull ${modelName}, or set "ghiaAI.model" to a model you have.`;
       }
       if (status === 401 || status === 403) {
         return "Authentication failed (401/403). Check your Ollama instance configuration.";
@@ -287,7 +287,7 @@ export class AIService {
       ) ||
       (error instanceof TypeError && msgLower.includes("fetch"))
     ) {
-      return "Could not reach Ollama. Ensure it is running locally and `codelensAI.ollamaEndpoint` is correct.";
+      return "Could not reach Ollama. Ensure it is running locally and `ghiaAI.ollamaEndpoint` is correct.";
     }
     if (/timeout|etimedout|timed out/i.test(msgLower)) {
       return "The request timed out. Check your network or try again.";

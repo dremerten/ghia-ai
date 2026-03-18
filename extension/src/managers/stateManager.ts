@@ -1,8 +1,6 @@
 import * as vscode from "vscode";
 
 const STATE_KEY = "ghia-ai.state";
-const LEGACY_ENABLED_KEY = "codelensAI.enabled";
-
 const DEBOUNCE_MS = 500;
 
 interface ExtensionState {
@@ -40,22 +38,7 @@ export class StateManager {
         hasShownWelcome: Boolean(stored.hasShownWelcome),
       };
     }
-    const legacyEnabled =
-      this.context.globalState.get<boolean>(LEGACY_ENABLED_KEY);
-    if (typeof legacyEnabled === "boolean") {
-      void this.migrateLegacyState(legacyEnabled);
-      return { ...DEFAULT_STATE, enabled: legacyEnabled };
-    }
     return { ...DEFAULT_STATE };
-  }
-
-  private async migrateLegacyState(legacyEnabled: boolean): Promise<void> {
-    const migrated: ExtensionState = {
-      ...DEFAULT_STATE,
-      enabled: legacyEnabled,
-    };
-    await this.context.globalState.update(STATE_KEY, migrated);
-    await this.context.globalState.update(LEGACY_ENABLED_KEY, undefined);
   }
 
   getEnabled(): boolean {

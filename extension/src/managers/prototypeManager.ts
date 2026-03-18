@@ -67,10 +67,10 @@ export class PrototypeManager implements vscode.Disposable {
 
   constructor(private readonly context: vscode.ExtensionContext) {
     // Enable Side Panel visibility by setting the context key
-    // This makes the "when": "codelensAI.prototype.sidePanelEnabled" condition true
+    // This makes the "when": "ghiaAI.prototype.sidePanelEnabled" condition true
     void vscode.commands.executeCommand(
       "setContext",
-      "codelensAI.prototype.sidePanelEnabled",
+      "ghiaAI.prototype.sidePanelEnabled",
       true
     );
 
@@ -94,7 +94,7 @@ export class PrototypeManager implements vscode.Disposable {
     // Listen for configuration changes
     this.disposables.push(
       vscode.workspace.onDidChangeConfiguration((e) => {
-        if (e.affectsConfiguration("codelensAI.prototype")) {
+        if (e.affectsConfiguration("ghiaAI.prototype")) {
           this.loadConfiguration();
         }
       })
@@ -184,6 +184,9 @@ export class PrototypeManager implements vscode.Disposable {
         (code?: string, context?: string) =>
           this.floatingPanelProvider?.showExplanation(code, context)
       ),
+      vscode.commands.registerCommand("ghia-ai.openWidePanel", () =>
+        this.floatingPanelProvider?.openPanel()
+      ),
 
       // Toggle commands
       vscode.commands.registerCommand(
@@ -200,7 +203,7 @@ export class PrototypeManager implements vscode.Disposable {
    * Only reads config - does not write back to avoid recursive change events.
    */
   private loadConfiguration(): void {
-    const config = vscode.workspace.getConfiguration("codelensAI.prototype");
+    const config = vscode.workspace.getConfiguration("ghiaAI.prototype");
     const mode = config.get<UIMode>("mode", "hover");
     // Apply mode without persisting - loadConfiguration is for reading only
     this.applyMode(mode);
@@ -294,7 +297,7 @@ export class PrototypeManager implements vscode.Disposable {
    */
   async setMode(mode: UIMode): Promise<void> {
     // Guard: skip config update if mode hasn't changed
-    const config = vscode.workspace.getConfiguration("codelensAI.prototype");
+    const config = vscode.workspace.getConfiguration("ghiaAI.prototype");
     const storedMode = config.get<UIMode>("mode");
 
     // Apply the mode (UI changes)
