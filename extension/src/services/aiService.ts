@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { fetch as undiciFetch } from "undici";
+import { readEndpointFromFile } from "../utils/endpoint";
 
 export interface AIConfig {
   model: string;
@@ -9,8 +10,7 @@ export interface AIConfig {
 // Use a capable default model available from Ollama's catalog.
 const DEFAULT_MODEL = "codegemma:2b";
 // Keep the default local; allow overriding without committing IPs/hosts.
-const DEFAULT_ENDPOINT =
-  process.env.GHIA_AI_OLLAMA_ENDPOINT ?? "http://localhost:11434";
+const DEFAULT_ENDPOINT = "http://localhost:11434";
 /** Maximum time to wait for an AI request before aborting (ms). */
 const AI_REQUEST_TIMEOUT_MS = 300_000; // 5 minutes for slow CPU-only runs
 
@@ -50,6 +50,23 @@ export class AIService {
 
   private getConfig(): AIConfig {
     const config = vscode.workspace.getConfiguration("ghiaAI");
+    const inspect = config.inspect<string>("ollamaEndpoint");
+    const hasUserEndpoint = Boolean(
+      inspect?.globalValue ?? inspect?.workspaceValue ?? inspect?.workspaceFolderValue
+    );
+    const endpointFromConfig = hasUserEndpoint ? config.get("ollamaEndpoint") : undefined;
+    const envEndpoint = process.env.GHIA_AI_OLLAMA_ENDPOINT;
+    const fileEndpoint = readEndpointFromFile();
+
+    const resolvedEndpoint =
+      (typeof endpointFromConfig === "string" && endpointFromConfig.trim()
+        ? endpointFromConfig.trim()
+        : undefined) ??
+      (typeof envEndpoint === "string" && envEndpoint.trim()
+        ? envEndpoint.trim()
+        : undefined) ??
+      fileEndpoint ??
+      DEFAULT_ENDPOINT;
     const modelFromConfig = config.get("model");
     const model =
       typeof modelFromConfig === "string" && modelFromConfig.trim()
@@ -59,7 +76,7 @@ export class AIService {
       model,
       // Default to the local Ollama instance, which is the expected setup for the
       // extension. Users can override via `ghiaAI.ollamaEndpoint` in settings.
-      ollamaEndpoint: config.get("ollamaEndpoint") ?? DEFAULT_ENDPOINT,
+      ollamaEndpoint: resolvedEndpoint,
     };
   }
 

@@ -1,8 +1,8 @@
 {
   "name": "ghia-ai",
   "displayName": "ghia-ai",
-  "version": "0.1.3",
-  "description": "Dumb down confusing code with AI-powered explanations. Click, read, understand—no more head-scratching over cryptic functions.",
+  "version": "1.0.0",
+  "description": "Clarify confusing code with AI-powered explanations. Click, read, understand—no more head-scratching over cryptic functions.",
   "publisher": "andremerten",
   "license": "MIT",
   "engines": {

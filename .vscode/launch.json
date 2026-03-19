@@ -1,0 +1,18 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Extension (root)",
+      "type": "extensionHost",
+      "request": "launch",
+      "runtimeExecutable": "${execPath}",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/extension"
+      ],
+      "preLaunchTask": "npm: build (extension)",
+      "outFiles": [
+        "${workspaceFolder}/extension/dist/**/*.js"
+      ]
+    }
+  ]
+}
