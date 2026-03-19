@@ -322,7 +322,6 @@ function validateBuildOutput(stage) {
   }
 
   const vscodeStub = {
-    CodeLens: class {},
     EventEmitter: class {
       constructor() {
         this.event = () => () => {};
@@ -367,9 +366,6 @@ function validateBuildOutput(stage) {
     },
     languages: {
       registerHoverProvider() {
-        return { dispose() {} };
-      },
-      registerCodeLensProvider() {
         return { dispose() {} };
       },
       registerCodeActionsProvider() {

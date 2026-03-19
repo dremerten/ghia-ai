@@ -1,5 +1,4 @@
 import * as vscode from "vscode";
-import { CodeLensExplainProvider } from "../providers/codeLensProvider";
 import {
   PeekExplanationProvider,
   QuickPeekProvider,
@@ -16,20 +15,17 @@ import {
  */
 export type UIMode =
   | "hover" // Original hover provider (merged with other hovers)
-  | "codelens" // Inline clickable annotations above code
   | "peek" // Peek definition-style overlay
   | "quickpeek" // Quick pick modal for fast explanations
   | "inlinepeek" // Inline decoration below code
   | "sidepanel" // Persistent sidebar webview
-  | "floatingpanel" // Floating webview beside editor
-  | "hybrid"; // Combination of multiple approaches
+  | "floatingpanel"; // Floating webview beside editor
 
 /**
  * Configuration for the prototype manager.
  */
 interface PrototypeConfig {
   activeMode: UIMode;
-  enableCodeLens: boolean;
   enableHover: boolean;
   enableSidePanel: boolean;
 }
@@ -38,7 +34,6 @@ interface PrototypeConfig {
  * Manages UI prototypes and allows switching between different display modes.
  *
  * This manager coordinates all the alternative UI approaches:
- * - CodeLens Provider: Clickable inline annotations
  * - Peek View Provider: Definition-style peek overlay
  * - Side Panel Provider: Persistent webview sidebar
  * - Floating Panel: Webview panel beside editor
@@ -49,7 +44,6 @@ export class PrototypeManager implements vscode.Disposable {
   private disposables: vscode.Disposable[] = [];
 
   // Provider instances
-  private codeLensProvider: CodeLensExplainProvider | null = null;
   private peekProvider: PeekExplanationProvider | null = null;
   private quickPeekProvider: QuickPeekProvider | null = null;
   private inlinePeekProvider: InlinePeekProvider | null = null;
@@ -57,8 +51,6 @@ export class PrototypeManager implements vscode.Disposable {
   private floatingPanelProvider: FloatingPanelProvider | null = null;
 
   // Registration disposables (for toggling providers)
-  private codeLensRegistration: vscode.Disposable | null = null;
-
   // Current active mode
   private currentMode: UIMode = "hover";
 
@@ -105,7 +97,6 @@ export class PrototypeManager implements vscode.Disposable {
    * Initializes all provider instances.
    */
   private initializeProviders(): void {
-    this.codeLensProvider = new CodeLensExplainProvider();
     this.peekProvider = new PeekExplanationProvider();
     this.quickPeekProvider = new QuickPeekProvider();
     this.inlinePeekProvider = new InlinePeekProvider();
@@ -123,7 +114,6 @@ export class PrototypeManager implements vscode.Disposable {
 
     // Track disposables
     this.disposables.push(
-      this.codeLensProvider,
       this.peekProvider,
       this.quickPeekProvider,
       this.inlinePeekProvider,
@@ -144,18 +134,6 @@ export class PrototypeManager implements vscode.Disposable {
       vscode.commands.registerCommand(
         "ghia-ai.prototype.setMode",
         (mode: UIMode) => this.setMode(mode)
-      ),
-
-      // CodeLens commands
-      vscode.commands.registerCommand(
-        "ghia-ai.explainCodeLens",
-        (code: string, context: string, languageId: string) =>
-          this.codeLensProvider?.handleExplainClick(code, context, languageId)
-      ),
-      vscode.commands.registerCommand(
-        "ghia-ai.showExplanation",
-        (explanation: string, code: string) =>
-          this.codeLensProvider?.showExplanation(explanation, code)
       ),
 
       // Peek explanation command (opens in VS Code peek view)
@@ -188,11 +166,6 @@ export class PrototypeManager implements vscode.Disposable {
         this.floatingPanelProvider?.openPanel()
       ),
 
-      // Toggle commands
-      vscode.commands.registerCommand(
-        "ghia-ai.prototype.toggleCodeLens",
-        () => this.toggleCodeLens()
-      ),
     ];
 
     this.disposables.push(...commands);
@@ -221,14 +194,6 @@ export class PrototypeManager implements vscode.Disposable {
           "Shows explanations in native VS Code hover. May conflict with other hovers.",
         mode: "hover",
         picked: this.currentMode === "hover",
-      },
-      {
-        label: "$(symbol-method) CodeLens",
-        description: "Inline clickable annotations",
-        detail:
-          "Shows 'Explain' links above functions/classes. Click to see explanation.",
-        mode: "codelens",
-        picked: this.currentMode === "codelens",
       },
       {
         label: "$(eye) Peek View",
@@ -267,14 +232,6 @@ export class PrototypeManager implements vscode.Disposable {
         detail: "Opens explanation in a panel next to your code.",
         mode: "floatingpanel",
         picked: this.currentMode === "floatingpanel",
-      },
-      {
-        label: "$(layers) Hybrid",
-        description: "CodeLens + Side Panel",
-        detail:
-          "Combines CodeLens annotations with the side panel for detailed views.",
-        mode: "hybrid",
-        picked: this.currentMode === "hybrid",
       },
     ];
 
@@ -322,13 +279,7 @@ export class PrototypeManager implements vscode.Disposable {
 
     switch (mode) {
       case "hover":
-        // Original hover mode - no additional providers
         this.updateStatusBar("$(comment-discussion)", "Hover Mode");
-        break;
-
-      case "codelens":
-        this.enableCodeLensMode();
-        this.updateStatusBar("$(symbol-method)", "CodeLens Mode");
         break;
 
       case "peek":
@@ -338,42 +289,21 @@ export class PrototypeManager implements vscode.Disposable {
 
       case "quickpeek":
         this.updateStatusBar("$(zap)", "Quick Peek Mode");
-        // Quick peek is command-based, no provider registration needed
         break;
 
       case "inlinepeek":
         this.updateStatusBar("$(lightbulb)", "Inline Peek Mode");
-        // Inline peek is command-based
         break;
 
       case "sidepanel":
         this.updateStatusBar("$(layout-sidebar-right)", "Side Panel Mode");
-        // Side panel is always registered, just focus it
         vscode.commands.executeCommand("ghia-ai.explanationPanel.focus");
         break;
 
       case "floatingpanel":
         this.updateStatusBar("$(window)", "Floating Panel Mode");
-        // Floating panel is command-based
-        break;
-
-      case "hybrid":
-        this.enableCodeLensMode();
-        this.updateStatusBar("$(layers)", "Hybrid Mode");
         break;
     }
-  }
-
-  /**
-   * Enables CodeLens mode by registering the CodeLens provider.
-   */
-  private enableCodeLensMode(): void {
-    if (!this.codeLensProvider) return;
-
-    this.codeLensRegistration = vscode.languages.registerCodeLensProvider(
-      [{ scheme: "file" }, { scheme: "untitled" }],
-      this.codeLensProvider
-    );
   }
 
   /**
@@ -387,25 +317,9 @@ export class PrototypeManager implements vscode.Disposable {
   }
 
   /**
-   * Toggles CodeLens on/off regardless of current mode.
-   */
-  private toggleCodeLens(): void {
-    if (this.codeLensRegistration) {
-      this.codeLensRegistration.dispose();
-      this.codeLensRegistration = null;
-      vscode.window.showInformationMessage("ghia-ai explanations disabled");
-    } else {
-      this.enableCodeLensMode();
-      vscode.window.showInformationMessage("ghia-ai explanations enabled");
-    }
-  }
-
-  /**
    * Cleans up all provider registrations.
    */
   private cleanupRegistrations(): void {
-    this.codeLensRegistration?.dispose();
-    this.codeLensRegistration = null;
   }
 
   /**
@@ -441,15 +355,9 @@ export class PrototypeManager implements vscode.Disposable {
       case "floatingpanel":
         await this.floatingPanelProvider?.showExplanation();
         break;
-      case "hybrid":
-        // In hybrid mode, use the side panel for detailed explanations
-        await this.sidePanelProvider?.explainCurrentSelection();
-        break;
       default:
-        // For hover, codelens, and peek modes, the explanation happens
-        // automatically through the registered providers
         vscode.window.showInformationMessage(
-          `In ${this.currentMode} mode, hover over code or use the CodeLens links.`
+          `In ${this.currentMode} mode, hover or run a ghia-ai command to see explanations.`
         );
     }
   }

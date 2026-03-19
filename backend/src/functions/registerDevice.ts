@@ -1,5 +1,5 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
-import { RegisterRequest, RegisterResponse } from '@codelens-ai/shared';
+import { RegisterRequest, RegisterResponse } from '@ghia-ai/shared';
 import { validateApiKey, createUnauthorizedResponse } from '../middleware/apiKeyAuth';
 import * as tokenService from '../services/tokenService';
 import * as quotaManager from '../services/quotaManager';

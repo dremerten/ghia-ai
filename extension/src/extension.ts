@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { CodeLensHoverProvider } from "./providers/hoverProvider";
+import { GhiaHoverProvider } from "./providers/hoverProvider";
 import { StateManager } from "./managers/stateManager";
 import { MenuManager } from "./managers/menuManager";
 import { StatusBarManager } from "./managers/statusBarManager";
@@ -27,7 +27,7 @@ let askStatusBar: vscode.StatusBarItem | undefined;
 let panelStatusBar: vscode.StatusBarItem | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
-  const hoverProvider = new CodeLensHoverProvider();
+  const hoverProvider = new GhiaHoverProvider();
   const sm = new StateManager(context);
   const mm = new MenuManager(sm, context);
   const sbm = new StatusBarManager(sm, mm);
@@ -269,7 +269,7 @@ export function activate(context: vscode.ExtensionContext): void {
     ...experimentRunCommands
   );
 
-  // Always register prototype UI (CodeLens/Side Panel/Floating)
+  // Always register prototype UI (Side Panel/Floating)
   // Users can still pick their preferred mode via settings or the mode selector.
   prototypeManager = new PrototypeManager(context);
   context.subscriptions.push(prototypeManager);

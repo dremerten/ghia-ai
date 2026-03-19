@@ -5,7 +5,7 @@
 
 import OpenAI from 'openai';
 import { config } from '../config/env';
-import type { ExplainRequest } from '@codelens-ai/shared';
+import type { ExplainRequest } from '@ghia-ai/shared';
 
 /**
  * Singleton Azure OpenAI client instance.

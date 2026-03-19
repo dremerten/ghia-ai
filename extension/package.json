@@ -91,10 +91,6 @@
         "title": "ghia-ai: Open Wide Panel"
       },
       {
-        "command": "ghia-ai.prototype.toggleCodeLens",
-        "title": "ghia-ai: Toggle CodeLens Annotations"
-      },
-      {
         "command": "ghia-ai.experiment.menu",
         "title": "ghia-ai: Hover Experiments Menu"
       },
@@ -207,24 +203,20 @@
           "type": "string",
           "enum": [
             "hover",
-            "codelens",
             "peek",
             "quickpeek",
             "inlinepeek",
             "sidepanel",
-            "floatingpanel",
-            "hybrid"
+            "floatingpanel"
           ],
-          "default": "hybrid",
+          "default": "hover",
           "enumDescriptions": [
             "Original hover tooltips (merged with VS Code hovers)",
-            "Inline clickable annotations above code constructs",
             "Peek definition-style overlay using virtual documents",
             "Fast modal explanation using Quick Pick",
             "Inline decoration below the hovered line",
             "Persistent sidebar webview with history",
-            "Floating webview panel beside the editor",
-            "Combination of CodeLens + Side Panel"
+            "Floating webview panel beside the editor"
           ],
           "description": "UI mode for displaying AI explanations. Each mode offers different trade-offs."
         },
@@ -236,7 +228,7 @@
         "ghiaAI.prototype.enablePrototypes": {
           "type": "boolean",
           "default": true,
-          "description": "Enable UI prototype alternatives (CodeLens, Peek View, Side Panel). Set to false to disable alternative UI modes."
+          "description": "Enable UI prototype alternatives (Peek View, Side Panel, Floating Panel). Set to false to disable alternative UI modes."
         }
       }
     }
