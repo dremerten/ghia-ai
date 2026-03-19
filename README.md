@@ -1,5 +1,9 @@
 # ghia-ai (VS Code extension)
 
+<p align="center">
+  <img src="./extension/media/ghia-ai.png" alt="ghia-ai" width="120" />
+</p>
+
 Local-first VS Code helper that explains code and answers questions using your own Ollama models. It shows results in hovers and a side panel with a single click.
 
 ## Quick start (local, Ollama)
