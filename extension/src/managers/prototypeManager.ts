@@ -100,9 +100,13 @@ export class PrototypeManager implements vscode.Disposable {
     this.peekProvider = new PeekExplanationProvider();
     this.quickPeekProvider = new QuickPeekProvider();
     this.inlinePeekProvider = new InlinePeekProvider();
-    this.sidePanelProvider = new SidePanelProvider(this.context.extensionUri);
+    this.sidePanelProvider = new SidePanelProvider(
+      this.context.extensionUri,
+      this.context
+    );
     this.floatingPanelProvider = new FloatingPanelProvider(
-      this.context.extensionUri
+      this.context.extensionUri,
+      this.context
     );
 
     // Register side panel view (always available)

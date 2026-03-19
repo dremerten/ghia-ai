@@ -55,6 +55,11 @@
         "title": "ghia-ai: Explain Selected Code"
       },
       {
+        "command": "ghia-ai.writeToFile",
+        "title": "ghia-ai: Write To File",
+        "category": "ghia-ai"
+      },
+      {
         "command": "ghia-ai.retryHoverExplanation",
         "title": "ghia-ai: Retry Hover Explanation"
       },

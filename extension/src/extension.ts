@@ -5,6 +5,9 @@ import { MenuManager } from "./managers/menuManager";
 import { StatusBarManager } from "./managers/statusBarManager";
 import { PrototypeManager } from "./managers/prototypeManager";
 import { AIService } from "./services/aiService";
+import { writeWithConsent } from "./utils/fileWriter";
+
+const ALLOW_WRITE_KEY = "ghiaAI.allowFileWrites";
 import {
   activateExperiments,
   deactivateExperiments,
@@ -159,6 +162,53 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   );
   context.subscriptions.push(askCommand);
+
+  // Write-to-file command with explicit user consent
+  const writeCommand = vscode.commands.registerCommand(
+    "ghia-ai.writeToFile",
+    async (
+      filePath?: string,
+      content?: string,
+      mode: "append" | "replace" = "append"
+    ) => {
+      try {
+        const targetPath =
+          typeof filePath === "string" && filePath.trim().length > 0
+            ? filePath.trim()
+            : await vscode.window
+                .showInputBox({
+                  prompt: "Path to write (absolute or workspace-relative)",
+                  value:
+                    vscode.window.activeTextEditor?.document.uri.fsPath ?? "",
+                })
+                .then((v) => v?.trim());
+        if (!targetPath) return;
+
+        const text =
+          typeof content === "string" && content.trim().length > 0
+            ? content
+            : await vscode.window.showInputBox({
+                prompt: "Content to write",
+                placeHolder: "Paste or type the text to write",
+                ignoreFocusOut: true,
+                validateInput: (val) =>
+                  val.length === 0 ? "Content cannot be empty" : undefined,
+              });
+        if (!text) return;
+
+        const allowWrites =
+          context.globalState.get<boolean>(ALLOW_WRITE_KEY, false) ?? false;
+        await writeWithConsent(targetPath, text, mode, allowWrites);
+        void vscode.window.showInformationMessage(
+          `ghia-ai wrote to ${targetPath}`
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        void vscode.window.showErrorMessage(`ghia-ai: ${msg}`);
+      }
+    }
+  );
+  context.subscriptions.push(writeCommand);
 
   // Status bar button to open Ask dialog quickly
   askStatusBar = vscode.window.createStatusBarItem(

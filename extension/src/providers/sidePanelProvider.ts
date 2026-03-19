@@ -2,6 +2,9 @@ import * as vscode from "vscode";
 import { AIService } from "../services/aiService";
 import { CacheService } from "../services/cacheService";
 import { ContextExtractor } from "../utils/contextExtractor";
+import { writeWithConsent } from "../utils/fileWriter";
+
+export const ALLOW_WRITE_KEY = "ghiaAI.allowFileWrites";
 
 /**
  * Data structure for explanation history entries.
@@ -54,11 +57,13 @@ export class SidePanelProvider
   private readonly contextExtractor = new ContextExtractor();
 
   private view?: vscode.WebviewView;
+  private iconUrl = "";
   private history: HistoryEntry[] = [];
   private conversation: ConversationEntry[] = [];
   private disposables: vscode.Disposable[] = [];
   private askInFlight = false;
   private pythonFocus = true;
+  private allowFileWrites = false;
 
   // Track current explanation being displayed with full context for refresh
   private currentExplanation: {
@@ -69,7 +74,31 @@ export class SidePanelProvider
     context: string;
   } | null = null;
 
-  constructor(private readonly extensionUri: vscode.Uri) {}
+  private fileOptions: string[] = [];
+
+  constructor(
+    private readonly extensionUri: vscode.Uri,
+    private readonly context: vscode.ExtensionContext
+  ) {
+    this.allowFileWrites = this.context.globalState.get<boolean>(
+      ALLOW_WRITE_KEY,
+      false
+    );
+
+    // Preload file options
+    void this.loadFileOptions();
+  }
+
+  /**
+   * Extracts the first fenced code block content from a markdown string.
+   */
+  private extractCodeSnippet(answer: string): string | null {
+    const match = answer.match(/```[a-zA-Z0-9_-]*\\n([\\s\\S]*?)```/);
+    if (match && match[1]) {
+      return match[1].trim();
+    }
+    return null;
+  }
 
   resolveWebviewView(
     webviewView: vscode.WebviewView,
@@ -82,9 +111,18 @@ export class SidePanelProvider
       enableScripts: true,
       localResourceRoots: [this.extensionUri],
     };
+    this.iconUrl = webviewView.webview
+      .asWebviewUri(
+        vscode.Uri.joinPath(this.extensionUri, "media", "ghia-ai.png")
+      )
+      .toString();
 
     const config = vscode.workspace.getConfiguration("ghiaAI");
     this.pythonFocus = config.get("askPythonMode", true);
+    this.allowFileWrites = this.context.globalState.get<boolean>(
+      ALLOW_WRITE_KEY,
+      false
+    );
 
     webviewView.webview.html = this.getHtml();
 
@@ -114,20 +152,23 @@ export class SidePanelProvider
           case "explainSelection":
             await this.explainCurrentSelection();
             break;
-          case "ask":
-            await this.handleAsk(message.question, {
-              includeSelection: Boolean(message.includeSelection),
-              includeFile: Boolean(message.includeFile),
-            });
-            break;
-          case "toggleScope":
-            await this.toggleScope();
-            break;
-        }
-      },
-      null,
-      this.disposables
-    );
+      case "ask":
+        await this.handleAsk(message.question, {
+          includeSelection: Boolean(message.includeSelection),
+          includeFile: Boolean(message.includeFile),
+        });
+        break;
+      case "toggleScope":
+        await this.toggleScope();
+        break;
+      case "toggleWritePermission":
+        this.setAllowFileWrites(Boolean(message.allow));
+        break;
+    }
+  },
+  null,
+  this.disposables
+);
 
     // Initial render
     this.updateView();
@@ -311,7 +352,12 @@ export class SidePanelProvider
    */
   private async handleAsk(
     question: string,
-    options: { includeSelection: boolean; includeFile: boolean }
+    options: {
+      includeSelection: boolean;
+      includeFile: boolean;
+      targetPath?: string;
+      writeMode?: "append" | "replace";
+    }
   ): Promise<void> {
     const trimmed = question?.trim();
     if (!trimmed) return;
@@ -376,6 +422,22 @@ export class SidePanelProvider
         undefined,
         this.pythonFocus
       );
+
+      // Optional: write answer to file when allowed and target provided
+      if (this.allowFileWrites && options.targetPath) {
+        try {
+          const snippet = this.extractCodeSnippet(answer) ?? answer;
+          await writeWithConsent(
+            options.targetPath,
+            snippet,
+            options.writeMode ?? "append",
+            true
+          );
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          vscode.window.showErrorMessage(`ghia-ai write failed: ${msg}`);
+        }
+      }
       this.replaceConversationEntry(assistantPlaceholder.id, {
         ...assistantPlaceholder,
         content: answer,
@@ -440,7 +502,25 @@ export class SidePanelProvider
         contextHints: this.getContextHints(),
         busy: this.currentExplanation?.isLoading || this.askInFlight,
         pythonFocus: this.pythonFocus,
+        allowFileWrites: this.allowFileWrites,
+        fileOptions: this.fileOptions,
       });
+    }
+  }
+
+  private async loadFileOptions(): Promise<void> {
+    try {
+      const uris = await vscode.workspace.findFiles(
+        "**/*",
+        "**/{node_modules,.git,.svn,.hg,.DS_Store,.venv,.tox,.next,out,dist,build,tmp,temp}/**",
+        120
+      );
+      this.fileOptions = uris
+        .map((u) => vscode.workspace.asRelativePath(u, false))
+        .filter((p) => p && !p.endsWith("/"));
+      this.updateView();
+    } catch {
+      // ignore listing errors
     }
   }
 
@@ -556,7 +636,7 @@ export class SidePanelProvider
       flex: 1;
     }
     .title-row { display: flex; align-items: center; gap: 6px; }
-    .title h1 { font-size: 14px; margin: 0; }
+    .title h1 { font-size: 14px; margin: 0; display:flex; align-items:center; gap:6px; }
     .subtitle { color: var(--muted); font-size: 12px; }
     .pill {
       border: 1px solid var(--border);
@@ -661,6 +741,7 @@ export class SidePanelProvider
     .composer-row { display: flex; gap: 8px; align-items: flex-start; }
     .composer-row button { height: 38px; }
     .chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    datalist option { color: var(--vscode-foreground); }
     .scope-row {
       display: flex;
       align-items: center;
@@ -691,13 +772,16 @@ export class SidePanelProvider
       <div class="title">
         <div class="title-row">
           <span class="pill">Panel</span>
-          <h1>🧠 ghia-ai</h1>
+          <h1><img src="${this.iconUrl}" alt="ghia-ai" style="width:18px;height:18px;border-radius:4px;"> ghia-ai</h1>
         </div>
         <div class="subtitle">Ask, explain, and keep context pinned like a sidekick.</div>
       </div>
       <div class="header-actions">
         <button class="btn ghost" onclick="refreshExplanation()" id="refresh-btn">Refresh</button>
         <button class="btn primary" onclick="explainSelection()">Explain Selection</button>
+        <button class="btn ghost" id="write-toggle" onclick="toggleWritePermission()">
+          ${this.allowFileWrites ? "Allow writes: On" : "Allow writes: Off"}
+        </button>
       </div>
     </div>
 
@@ -738,6 +822,21 @@ export class SidePanelProvider
           </label>
           <span class="hint" id="context-hint"></span>
         </div>
+        <div class="chips" id="write-controls">
+          <label class="chip">
+            Target file:
+            <input list="file-options" type="text" id="target-file" placeholder="e.g. start.py" style="width:180px;">
+            <datalist id="file-options"></datalist>
+          </label>
+          <label class="chip">
+            Mode:
+            <select id="write-mode">
+              <option value="append">Append</option>
+              <option value="replace">Replace</option>
+            </select>
+          </label>
+          <span class="hint">Enabled when writes are allowed.</span>
+        </div>
         <div class="composer-row">
           <textarea id="question" rows="3" placeholder="Ask about this code, a bug, or a concept…"></textarea>
           <button type="submit" class="btn primary" id="send-btn">Send</button>
@@ -761,13 +860,17 @@ export class SidePanelProvider
     let thinkTimer = null;
     let thinkingIndex = 0;
     const thinkingEmojis = ["🤔", "🌀", "💭", "✨", "⌛"];
+    let allowWrites = false;
+    let messageFileOptions = [];
 
     document.getElementById('composer').addEventListener('submit', (event) => {
       event.preventDefault();
       const question = document.getElementById('question').value;
       const includeSelection = document.getElementById('include-selection').checked;
       const includeFile = document.getElementById('include-file').checked;
-      vscode.postMessage({ command: 'ask', question, includeSelection, includeFile });
+      const targetPath = document.getElementById('target-file').value || undefined;
+      const writeMode = document.getElementById('write-mode').value || "append";
+      vscode.postMessage({ command: 'ask', question, includeSelection, includeFile, targetPath, writeMode });
       document.getElementById('question').value = '';
     });
 
@@ -780,6 +883,9 @@ export class SidePanelProvider
     function toggleHistory() {
       const section = document.getElementById('history-section');
       section.classList.toggle('open');
+    }
+    function toggleWritePermission() {
+      vscode.postMessage({ command: 'toggleWritePermission', allow: !allowWrites });
     }
 
     function escapeHtml(text) {
@@ -874,12 +980,22 @@ export class SidePanelProvider
       latestContextHints = hints || latestContextHints;
       const selectionBox = document.getElementById('include-selection');
       const fileBox = document.getElementById('include-file');
+      const targetInput = document.getElementById('target-file');
+      const modeSelect = document.getElementById('write-mode');
+      const datalist = document.getElementById('file-options');
       selectionBox.disabled = !latestContextHints.hasSelection;
       if (!latestContextHints.hasSelection) selectionBox.checked = false;
       document.getElementById('context-hint').textContent = latestContextHints.selectionLabel || latestContextHints.fileName || '';
       document.getElementById('refresh-btn').style.display = 'inline-flex';
       fileBox.disabled = !latestContextHints.hasFile;
       if (!latestContextHints.hasFile) fileBox.checked = false;
+      targetInput.disabled = !allowWrites;
+      modeSelect.disabled = !allowWrites;
+      if (datalist && Array.isArray(messageFileOptions)) {
+        datalist.innerHTML = messageFileOptions
+          .map((opt) => '<option value="' + opt + '"></option>')
+          .join('');
+      }
     }
 
     function setBusy(isBusy) {
@@ -900,6 +1016,14 @@ export class SidePanelProvider
       btn.classList.toggle('primary', pythonOn);
     }
 
+    function setWriteToggle(enabled) {
+      allowWrites = !!enabled;
+      const btn = document.getElementById('write-toggle');
+      if (!btn) return;
+      btn.textContent = enabled ? 'Allow writes: On' : 'Allow writes: Off';
+      btn.classList.toggle('primary', enabled);
+    }
+
     window.addEventListener('message', event => {
       const message = event.data;
       if (message.type === 'update') {
@@ -909,6 +1033,8 @@ export class SidePanelProvider
         renderContextHints(message.contextHints);
         setBusy(!!message.busy);
         setScope(!!message.pythonFocus);
+        messageFileOptions = message.fileOptions || [];
+        setWriteToggle(!!message.allowFileWrites);
       }
     });
 
@@ -944,6 +1070,12 @@ export class SidePanelProvider
     this.updateView();
   }
 
+  private async setAllowFileWrites(enabled: boolean): Promise<void> {
+    this.allowFileWrites = enabled;
+    await this.context.globalState.update(ALLOW_WRITE_KEY, enabled);
+    this.updateView();
+  }
+
   dispose(): void {
     this.disposables.forEach((d) => d.dispose());
   }
@@ -964,8 +1096,20 @@ export class FloatingPanelProvider implements vscode.Disposable {
    // In-panel chat history for context across questions
   private conversation: { role: "user" | "assistant"; content: string }[] = [];
   private pythonFocus = true;
+  private allowFileWrites = false;
+  private fileOptions: string[] = [];
+  private iconUrl = "";
 
-  constructor(private readonly extensionUri: vscode.Uri) {}
+  constructor(
+    private readonly extensionUri: vscode.Uri,
+    private readonly context: vscode.ExtensionContext
+  ) {
+    this.allowFileWrites = this.context.globalState.get<boolean>(
+      ALLOW_WRITE_KEY,
+      false
+    );
+    void this.loadFileOptions();
+  }
 
   /**
    * Opens an empty ghia-ai panel to the right, sized evenly with the editor.
@@ -1066,6 +1210,12 @@ export class FloatingPanelProvider implements vscode.Disposable {
       this.disposables
     );
 
+    this.iconUrl = this.panel.webview
+      .asWebviewUri(
+        vscode.Uri.joinPath(this.extensionUri, "media", "ghia-ai.png")
+      )
+      .toString();
+
     this.panel.webview.onDidReceiveMessage(
       async (message) => {
         if (message.command === "copy" && message.text) {
@@ -1075,12 +1225,16 @@ export class FloatingPanelProvider implements vscode.Disposable {
           await this.handleAsk(message.text, {
             includeSelection: Boolean(message.includeSelection),
             includeFile: Boolean(message.includeFile),
+            targetPath: message.targetPath,
+            writeMode: message.writeMode,
           });
         } else if (message.command === "clear") {
           this.conversation = [];
           this.panel!.webview.html = this.renderChatHtml();
         } else if (message.command === "toggleScope") {
           await this.toggleScope();
+        } else if (message.command === "toggleWritePermission") {
+          await this.setAllowFileWrites(!this.allowFileWrites);
         }
       },
       null,
@@ -1093,6 +1247,9 @@ export class FloatingPanelProvider implements vscode.Disposable {
   }
 
   private getWelcomeHtml(): string {
+    const optionsHtml = this.fileOptions
+      .map((opt) => `<option value="${this.escapeHtml(opt)}"></option>`)
+      .join("");
     return `<!DOCTYPE html>
 <html>
 <head>
@@ -1116,11 +1273,14 @@ export class FloatingPanelProvider implements vscode.Disposable {
   </style>
 </head>
 <body>
-  <h1>🧠 ghia-ai</h1>
+  <h1><img src="${this.iconUrl}" alt="ghia-ai" style="width:18px;height:18px;border-radius:4px;"> ghia-ai</h1>
   <p>Ask a question or select code, then click Send.</p>
   <div class="scope-row">
     <button class="btn ghost" id="scope-toggle-inline" aria-pressed="${this.pythonFocus ? "true" : "false"}">
       ${this.pythonFocus ? "Python focus: On" : "Python focus: Off"}
+    </button>
+    <button class="btn ghost" id="write-toggle" aria-pressed="${this.allowFileWrites ? "true" : "false"}">
+      ${this.allowFileWrites ? "Allow writes: On" : "Allow writes: Off"}
     </button>
     <span style="color: var(--vscode-descriptionForeground); font-size: 12px;">Python-heavy answers when on; general answers when off.</span>
   </div>
@@ -1128,6 +1288,16 @@ export class FloatingPanelProvider implements vscode.Disposable {
     <div class="chips">
       <label class="chip"><input type="checkbox" id="include-selection" checked> Selection</label>
       <label class="chip"><input type="checkbox" id="include-file" checked> Current file</label>
+      <label class="chip">Target file
+        <input list="file-options" type="text" id="target-file" placeholder="e.g. start.py" style="width:200px;" ${this.allowFileWrites ? "" : "disabled"}>
+        <datalist id="file-options">${optionsHtml}</datalist>
+      </label>
+      <label class="chip">Mode
+        <select id="write-mode">
+          <option value="append">Append</option>
+          <option value="replace">Replace</option>
+        </select>
+      </label>
     </div>
     <textarea id="ask-input" rows="4" placeholder="How does this function work? What is causing this bug?"></textarea>
     <div class="row">
@@ -1139,12 +1309,15 @@ export class FloatingPanelProvider implements vscode.Disposable {
   <script>
     const vscode = acquireVsCodeApi();
     document.getElementById('scope-toggle-inline')?.addEventListener('click', () => vscode.postMessage({ command: 'toggleScope' }));
+    document.getElementById('write-toggle')?.addEventListener('click', () => vscode.postMessage({ command: 'toggleWritePermission' }));
     document.getElementById('ask-form').addEventListener('submit', (event) => {
       event.preventDefault();
       const text = document.getElementById('ask-input').value;
       const includeSelection = document.getElementById('include-selection').checked;
       const includeFile = document.getElementById('include-file').checked;
-      vscode.postMessage({ command: 'ask', text, includeSelection, includeFile });
+      const targetPath = document.getElementById('target-file').value || undefined;
+      const writeMode = document.getElementById('write-mode').value || "append";
+      vscode.postMessage({ command: 'ask', text, includeSelection, includeFile, targetPath, writeMode });
     });
   </script>
 </body>
@@ -1163,6 +1336,10 @@ export class FloatingPanelProvider implements vscode.Disposable {
       ? `<div class="typing" id="typing-text">🤔 thinking…</div>`
       : "";
 
+    const optionsHtml = this.fileOptions
+      .map((opt) => `<option value="${this.escapeHtml(opt)}"></option>`)
+      .join("");
+
     return `<!DOCTYPE html>
 <html>
 <head>
@@ -1178,10 +1355,12 @@ export class FloatingPanelProvider implements vscode.Disposable {
     .chips { display:flex; gap:8px; flex-wrap:wrap; }
     .chip { display:inline-flex; gap:6px; align-items:center; padding:4px 8px; border-radius:999px; border:1px solid var(--vscode-input-border); background: var(--vscode-editorWidget-background); font-size:12px; }
     .scope-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
+    .write-row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; align-items:center; }
     textarea { width:100%; box-sizing:border-box; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border:1px solid var(--vscode-input-border); border-radius:6px; padding:8px; font-family: var(--vscode-editor-font-family); }
     button { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border:1px solid var(--vscode-button-border); padding:8px 12px; border-radius:6px; cursor:pointer; }
     button:hover { background: var(--vscode-button-hoverBackground); }
     .actions { display:flex; gap:8px; align-items:center; }
+    datalist option { color: var(--vscode-foreground); }
   </style>
 </head>
 <body>
@@ -1192,11 +1371,27 @@ export class FloatingPanelProvider implements vscode.Disposable {
       <button class="btn ghost" id="scope-toggle-inline" aria-pressed="${this.pythonFocus ? "true" : "false"}">
         ${this.pythonFocus ? "Python focus: On" : "Python focus: Off"}
       </button>
+      <button class="btn ghost" id="write-toggle" aria-pressed="${this.allowFileWrites ? "true" : "false"}">
+        ${this.allowFileWrites ? "Allow writes: On" : "Allow writes: Off"}
+      </button>
       <span style="color: var(--vscode-descriptionForeground); font-size: 12px;">Python-heavy answers when on; general answers when off.</span>
     </div>
     <div class="chips">
       <label class="chip"><input type="checkbox" id="include-selection" checked> Selection</label>
       <label class="chip"><input type="checkbox" id="include-file" checked> Current file</label>
+    </div>
+    <div class="write-row">
+      <label class="chip">Target file
+        <input list="file-options" type="text" id="target-file" placeholder="start.py" style="width:200px;" ${this.allowFileWrites ? "" : "disabled"}>
+        <datalist id="file-options">${optionsHtml}</datalist>
+      </label>
+      <label class="chip">Mode
+        <select id="write-mode" ${this.allowFileWrites ? "" : "disabled"}>
+          <option value="append">Append</option>
+          <option value="replace">Replace</option>
+        </select>
+      </label>
+      <span style="color: var(--vscode-descriptionForeground); font-size: 12px;">Enabled when writes are allowed.</span>
     </div>
     <textarea id="ask-input" rows="3" placeholder="Ask a follow-up or a new question"></textarea>
     <div class="actions">
@@ -1210,13 +1405,16 @@ export class FloatingPanelProvider implements vscode.Disposable {
     const thinkingEmojis = ["🤔", "🌀", "💭", "✨", "⌛"];
     let emojiIndex = 0;
     document.getElementById('scope-toggle-inline')?.addEventListener('click', () => vscode.postMessage({ command: 'toggleScope' }));
+    document.getElementById('write-toggle')?.addEventListener('click', () => vscode.postMessage({ command: 'toggleWritePermission' }));
     const form = document.getElementById('ask-form');
     form.addEventListener('submit', (e) => {
       e.preventDefault();
       const text = document.getElementById('ask-input').value;
       const includeSelection = document.getElementById('include-selection').checked;
       const includeFile = document.getElementById('include-file').checked;
-      vscode.postMessage({ command: 'ask', text, includeSelection, includeFile });
+      const targetPath = document.getElementById('target-file').value || undefined;
+      const writeMode = document.getElementById('write-mode').value || "append";
+      vscode.postMessage({ command: 'ask', text, includeSelection, includeFile, targetPath, writeMode });
       document.getElementById('ask-input').value = '';
     });
     document.getElementById('clear-btn').addEventListener('click', () => {
