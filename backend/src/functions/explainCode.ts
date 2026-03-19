@@ -1,5 +1,5 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
-import { ExplainRequest, ExplainResponse, ErrorResponse, UsageSnapshot } from '@codelens-ai/shared';
+import { ExplainRequest, ExplainResponse, ErrorResponse, UsageSnapshot } from '@ghia-ai/shared';
 import { validateApiKey, createUnauthorizedResponse } from '../middleware/apiKeyAuth';
 import { validateToken } from '../services/tokenService';
 import { checkAndConsumeQuota } from '../services/quotaManager';
@@ -63,7 +63,7 @@ function createUpstreamThrottledResponse(retryAfter?: number): HttpResponseInit 
 function createServiceErrorResponse(): HttpResponseInit {
   const response: ErrorResponse = {
     error: 'SERVICE_ERROR',
-    message: 'codelens-ai service error. Try again in a few minutes.'
+    message: 'ghia-ai service error. Try again in a few minutes.'
   };
 
   return {

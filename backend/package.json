@@ -1,7 +1,7 @@
 {
-  "name": "codelens-ai-backend",
+  "name": "ghia-ai-backend",
   "version": "1.0.0",
-  "description": "codelens-ai backend service for Azure Functions",
+  "description": "ghia-ai backend service for Azure Functions",
   "scripts": {
     "build": "tsc",
     "watch": "tsc --watch",
@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@azure/functions": "^4.0.0",
-    "@codelens-ai/shared": "file:../shared",
+    "@ghia-ai/shared": "file:../shared",
     "dotenv": "^17.2.4",
     "ioredis": "^5.3.0",
     "jsonwebtoken": "^9.0.0",
@@ -20,8 +20,10 @@
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20.0.0",
-    "azure-functions-core-tools": "^4.0.0",
     "typescript": "^5.0.0"
+  },
+  "overrides": {
+    "minimatch": "^8.0.6"
   },
   "main": "dist/index.js"
 }

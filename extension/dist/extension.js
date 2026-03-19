@@ -2519,10 +2519,10 @@ var require_wrap_handler = __commonJS({
 var require_dispatcher = __commonJS({
   "node_modules/undici/lib/dispatcher/dispatcher.js"(exports2, module2) {
     "use strict";
-    var EventEmitter4 = require("node:events");
+    var EventEmitter3 = require("node:events");
     var WrapHandler = require_wrap_handler();
     var wrapInterceptor = (dispatch) => (opts, handler) => dispatch(opts, WrapHandler.wrap(handler));
-    var Dispatcher = class extends EventEmitter4 {
+    var Dispatcher = class extends EventEmitter3 {
       dispatch() {
         throw new Error("not implemented");
       }
@@ -9800,7 +9800,7 @@ var require_socks5_utils = __commonJS({
 var require_socks5_client = __commonJS({
   "node_modules/undici/lib/core/socks5-client.js"(exports2, module2) {
     "use strict";
-    var { EventEmitter: EventEmitter4 } = require("node:events");
+    var { EventEmitter: EventEmitter3 } = require("node:events");
     var { Buffer: Buffer2 } = require("node:buffer");
     var { InvalidArgumentError, Socks5ProxyError } = require_errors();
     var { debuglog } = require("node:util");
@@ -9843,7 +9843,7 @@ var require_socks5_client = __commonJS({
       ERROR: "error",
       CLOSED: "closed"
     };
-    var Socks5Client = class extends EventEmitter4 {
+    var Socks5Client = class extends EventEmitter3 {
       constructor(socket, options = {}) {
         super();
         if (!socket) {
@@ -16215,9 +16215,9 @@ var require_memory_cache_store = __commonJS({
   "node_modules/undici/lib/cache/memory-cache-store.js"(exports2, module2) {
     "use strict";
     var { Writable } = require("node:stream");
-    var { EventEmitter: EventEmitter4 } = require("node:events");
+    var { EventEmitter: EventEmitter3 } = require("node:events");
     var { assertCacheKey, assertCacheValue } = require_cache();
-    var MemoryCacheStore = class extends EventEmitter4 {
+    var MemoryCacheStore = class extends EventEmitter3 {
       #maxCount = 1024;
       #maxSize = 104857600;
       // 100MB
@@ -18819,15 +18819,15 @@ var require_request2 = __commonJS({
           this.#dispatcher = init.dispatcher || input.#dispatcher;
         }
         const origin = environmentSettingsObject.settingsObject.origin;
-        let window10 = "client";
+        let window9 = "client";
         if (request.window?.constructor?.name === "EnvironmentSettingsObject" && sameOrigin(request.window, origin)) {
-          window10 = request.window;
+          window9 = request.window;
         }
         if (init.window != null) {
-          throw new TypeError(`'window' option '${window10}' must be null`);
+          throw new TypeError(`'window' option '${window9}' must be null`);
         }
         if ("window" in init) {
-          window10 = "no-window";
+          window9 = "no-window";
         }
         request = makeRequest({
           // URL request’s URL.
@@ -18842,7 +18842,7 @@ var require_request2 = __commonJS({
           // client This’s relevant settings object.
           client: environmentSettingsObject.settingsObject,
           // window window.
-          window: window10,
+          window: window9,
           // priority request’s priority.
           priority: request.priority,
           // origin request’s origin. The propagation of the origin is only significant for navigation requests
@@ -24779,7 +24779,7 @@ __export(extension_exports, {
   deactivate: () => deactivate
 });
 module.exports = __toCommonJS(extension_exports);
-var vscode14 = __toESM(require("vscode"));
+var vscode13 = __toESM(require("vscode"));
 
 // src/providers/hoverProvider.ts
 var vscode4 = __toESM(require("vscode"));
@@ -25898,7 +25898,7 @@ var THEME_HIGHLIGHT = {
 };
 var CACHED_ERROR_PREFIX = "Something went wrong:";
 var DETAILED_LINE_RANGE = 15;
-var CodeLensHoverProvider = class {
+var GhiaHoverProvider = class {
   aiService = new AIService();
   cacheService = new CacheService();
   contextExtractor = new ContextExtractor();
@@ -26688,271 +26688,14 @@ var StatusBarManager = class {
 };
 
 // src/managers/prototypeManager.ts
-var vscode11 = __toESM(require("vscode"));
-
-// src/providers/codeLensProvider.ts
-var vscode8 = __toESM(require("vscode"));
-var ExplainCodeLens = class extends vscode8.CodeLens {
-  constructor(range, code, context, languageId) {
-    super(range);
-    this.code = code;
-    this.context = context;
-    this.languageId = languageId;
-  }
-};
-var CodeLensExplainProvider = class {
-  aiService = new AIService();
-  cacheService = new CacheService();
-  contextExtractor = new ContextExtractor();
-  _onDidChangeCodeLenses = new vscode8.EventEmitter();
-  onDidChangeCodeLenses = this._onDidChangeCodeLenses.event;
-  // Track pending explanations to show loading state
-  pendingExplanations = /* @__PURE__ */ new Set();
-  explanationPanel = null;
-  // Patterns to detect code constructs worth explaining
-  patterns = {
-    // Function declarations and expressions
-    function: /^\s*(export\s+)?(async\s+)?function\s+(\w+)/,
-    arrowFunction: /^\s*(export\s+)?(const|let|var)\s+(\w+)\s*=\s*(async\s+)?\(/,
-    arrowFunctionShort: /^\s*(export\s+)?(const|let|var)\s+(\w+)\s*=\s*(async\s+)?(\w+|\([^)]*\))\s*=>/,
-    // Class and method declarations
-    class: /^\s*(export\s+)?(abstract\s+)?class\s+(\w+)/,
-    method: /^\s*(public|private|protected|static|async|\s)*(\w+)\s*\([^)]*\)\s*[:{]/,
-    // React/JSX components
-    component: /^\s*(export\s+)?(const|function)\s+([A-Z]\w+)/,
-    // Variable declarations with complex values
-    complexVariable: /^\s*(export\s+)?(const|let|var)\s+(\w+)\s*=\s*(new\s+\w+|\{|\[|function|class)/,
-    // Python patterns
-    pythonFunction: /^\s*(async\s+)?def\s+(\w+)/,
-    pythonClass: /^\s*class\s+(\w+)/,
-    // Go patterns
-    goFunction: /^\s*func\s+(\([^)]+\)\s*)?(\w+)/,
-    goStruct: /^\s*type\s+(\w+)\s+struct/,
-    // Rust patterns
-    rustFunction: /^\s*(pub\s+)?(async\s+)?fn\s+(\w+)/,
-    rustStruct: /^\s*(pub\s+)?struct\s+(\w+)/,
-    rustImpl: /^\s*impl\s+(<[^>]+>\s+)?(\w+)/
-  };
-  provideCodeLenses(document, _token) {
-    const constructs = this.detectConstructs(document);
-    return constructs.map(
-      (c) => new ExplainCodeLens(c.range, c.code, c.context, document.languageId)
-    );
-  }
-  resolveCodeLens(codeLens, _token) {
-    if (!(codeLens instanceof ExplainCodeLens)) {
-      return codeLens;
-    }
-    const key = this.getKey(codeLens.code);
-    const cached = this.cacheService.get(codeLens.code);
-    const isPending = this.pendingExplanations.has(key);
-    if (isPending) {
-      codeLens.command = {
-        title: "$(loading~spin) Explaining...",
-        command: ""
-      };
-    } else if (cached) {
-      const preview = cached.length > 50 ? `${cached.substring(0, 47)}...` : cached;
-      codeLens.command = {
-        title: `$(lightbulb) ${preview}`,
-        command: "ghia-ai.showExplanation",
-        arguments: [cached, codeLens.code]
-      };
-    } else {
-      codeLens.command = {
-        title: "$(comment-discussion) Explain this code",
-        command: "ghia-ai.explainCodeLens",
-        arguments: [codeLens.code, codeLens.context, codeLens.languageId]
-      };
-    }
-    return codeLens;
-  }
-  /**
-   * Called when user clicks "Explain this code" CodeLens.
-   * Fetches explanation and updates the CodeLens to show the result.
-   */
-  async handleExplainClick(code, context, languageId) {
-    const panel = this.getOrCreatePanel("ghia-ai: Explanation");
-    panel.webview.html = this.renderHtml("Preparing explanation...");
-    const key = this.getKey(code);
-    this.pendingExplanations.add(key);
-    this._onDidChangeCodeLenses.fire();
-    try {
-      const explanation = await this.aiService.explain(
-        code,
-        languageId,
-        context
-      );
-      this.cacheService.set(code, explanation);
-      panel.webview.html = this.renderHtml(explanation);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.cacheService.set(code, `Error: ${message}`);
-      panel.webview.html = this.renderHtml(`Error: ${message}`);
-    } finally {
-      this.pendingExplanations.delete(key);
-      this._onDidChangeCodeLenses.fire();
-    }
-  }
-  /**
-   * Shows a quick pick with the full explanation when user clicks a resolved CodeLens.
-   */
-  async showExplanation(explanation, code) {
-    const codePreview = code.length > 60 ? `${code.substring(0, 57)}...` : code;
-    await vscode8.window.showInformationMessage(
-      explanation,
-      { modal: false, detail: `Code: ${codePreview}` },
-      "Copy",
-      "Open in Panel"
-    ).then((selection) => {
-      if (selection === "Copy") {
-        vscode8.env.clipboard.writeText(explanation);
-        vscode8.window.showInformationMessage(
-          "Explanation copied to clipboard"
-        );
-      } else if (selection === "Open in Panel") {
-        vscode8.commands.executeCommand("ghia-ai.explainCode", code, "");
-      }
-    });
-  }
-  /**
-   * Detects code constructs in the document that are worth explaining.
-   * Uses regex patterns for different languages.
-   */
-  detectConstructs(document) {
-    const constructs = [];
-    const lineCount = document.lineCount;
-    const languageId = document.languageId;
-    for (let i = 0; i < lineCount; i++) {
-      const line = document.lineAt(i);
-      const text = line.text;
-      if (text.trim().length === 0) continue;
-      if (this.isCommentLine(text, languageId)) continue;
-      const construct = this.matchConstruct(text, i, document);
-      if (construct) {
-        constructs.push(construct);
-      }
-    }
-    return constructs;
-  }
-  matchConstruct(text, lineIndex, document) {
-    const position = new vscode8.Position(lineIndex, 0);
-    const range = new vscode8.Range(lineIndex, 0, lineIndex, text.length);
-    for (const [patternName, pattern] of Object.entries(this.patterns)) {
-      const match = text.match(pattern);
-      if (match) {
-        const name = this.extractName(match, patternName);
-        const type = this.getConstructType(patternName);
-        const { code, context } = this.contextExtractor.extract(
-          document,
-          position,
-          10
-        );
-        const blockCode = this.contextExtractor.extractBlock(
-          document,
-          position
-        );
-        return {
-          type,
-          name,
-          range,
-          code: blockCode.length < 500 ? blockCode : code,
-          context
-        };
-      }
-    }
-    return null;
-  }
-  extractName(match, patternName) {
-    const groups = match.filter(
-      (g) => g && !g.includes("export") && !g.includes("const")
-    );
-    return groups[groups.length - 1] || "unnamed";
-  }
-  getConstructType(patternName) {
-    if (patternName.includes("class") || patternName.includes("struct")) {
-      return "class";
-    }
-    if (patternName.includes("method")) {
-      return "method";
-    }
-    if (patternName.includes("function") || patternName.includes("Function")) {
-      return "function";
-    }
-    if (patternName.includes("Variable")) {
-      return "variable";
-    }
-    return "block";
-  }
-  isCommentLine(text, languageId) {
-    const trimmed = text.trim();
-    if (trimmed.startsWith("//")) return true;
-    if (trimmed.startsWith("/*")) return true;
-    if (trimmed.startsWith("*")) return true;
-    if (trimmed.startsWith("#") && languageId !== "csharp") return true;
-    if (trimmed.startsWith("--") && languageId === "lua") return true;
-    return false;
-  }
-  getKey(code) {
-    let hash = 0;
-    for (let i = 0; i < code.length; i++) {
-      hash = (hash << 5) - hash + code.charCodeAt(i);
-      hash = hash & hash;
-    }
-    return String(hash);
-  }
-  dispose() {
-    this._onDidChangeCodeLenses.dispose();
-    this.explanationPanel?.dispose();
-  }
-  getOrCreatePanel(title) {
-    if (this.explanationPanel) {
-      try {
-        this.explanationPanel.reveal(vscode8.ViewColumn.Beside);
-        this.explanationPanel.title = title;
-        return this.explanationPanel;
-      } catch {
-        this.explanationPanel = null;
-      }
-    }
-    this.explanationPanel = vscode8.window.createWebviewPanel(
-      "ghiaAiExplain",
-      title,
-      vscode8.ViewColumn.Beside,
-      { enableScripts: false }
-    );
-    this.explanationPanel.onDidDispose(() => {
-      this.explanationPanel = null;
-    });
-    return this.explanationPanel;
-  }
-  renderHtml(body) {
-    return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <style>
-    body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); color: var(--vscode-foreground); padding: 1rem; line-height: 1.6; }
-    pre { white-space: pre-wrap; word-break: break-word; font-family: var(--vscode-editor-font-family); font-size: var(--vscode-editor-font-size); background: var(--vscode-editor-background); padding: 0.75rem; border-radius: 6px; border: 1px solid var(--vscode-editorWidget-border); }
-  </style>
-</head>
-<body>
-  <pre>${this.escapeHtml(body)}</pre>
-</body>
-</html>`;
-  }
-  escapeHtml(text) {
-    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-  }
-};
+var vscode10 = __toESM(require("vscode"));
 
 // src/providers/peekViewProvider.ts
-var vscode9 = __toESM(require("vscode"));
+var vscode8 = __toESM(require("vscode"));
 var EXPLAIN_SCHEME = "ghia-explain";
 var explanationStore = /* @__PURE__ */ new Map();
 var ExplanationDocumentProvider = class {
-  _onDidChange = new vscode9.EventEmitter();
+  _onDidChange = new vscode8.EventEmitter();
   onDidChange = this._onDidChange.event;
   provideTextDocumentContent(uri) {
     const id = uri.path;
@@ -27002,7 +26745,7 @@ var PeekExplanationProvider = class {
   disposables = [];
   constructor() {
     this.documentProvider = new ExplanationDocumentProvider();
-    const registration = vscode9.workspace.registerTextDocumentContentProvider(
+    const registration = vscode8.workspace.registerTextDocumentContentProvider(
       EXPLAIN_SCHEME,
       this.documentProvider
     );
@@ -27013,28 +26756,28 @@ var PeekExplanationProvider = class {
    * Call this via a command to avoid intercepting Go to Definition.
    */
   async showPeekExplanation() {
-    const editor = vscode9.window.activeTextEditor;
+    const editor = vscode8.window.activeTextEditor;
     if (!editor) {
-      vscode9.window.showWarningMessage("No active editor");
+      vscode8.window.showWarningMessage("No active editor");
       return;
     }
     const document = editor.document;
     const position = editor.selection.active;
     const lineText = document.lineAt(position.line).text;
     if (lineText.trim().length === 0) {
-      vscode9.window.showInformationMessage("Place cursor on a line with code");
+      vscode8.window.showInformationMessage("Place cursor on a line with code");
       return;
     }
     const { code, context } = this.contextExtractor.extract(document, position);
     if (code.length === 0) {
-      vscode9.window.showInformationMessage("No code found at cursor position");
+      vscode8.window.showInformationMessage("No code found at cursor position");
       return;
     }
     let explanation = this.cacheService.get(code);
     if (!explanation) {
-      explanation = await vscode9.window.withProgress(
+      explanation = await vscode8.window.withProgress(
         {
-          location: vscode9.ProgressLocation.Notification,
+          location: vscode8.ProgressLocation.Notification,
           title: "ghia-ai: Generating explanation...",
           cancellable: true
         },
@@ -27057,13 +26800,13 @@ var PeekExplanationProvider = class {
       languageId: document.languageId,
       timestamp: Date.now()
     });
-    const uri = vscode9.Uri.parse(`${EXPLAIN_SCHEME}:${id}`);
+    const uri = vscode8.Uri.parse(`${EXPLAIN_SCHEME}:${id}`);
     this.documentProvider.update(uri);
-    await vscode9.commands.executeCommand(
+    await vscode8.commands.executeCommand(
       "editor.action.peekLocations",
       editor.document.uri,
       position,
-      [new vscode9.Location(uri, new vscode9.Position(0, 0))],
+      [new vscode8.Location(uri, new vscode8.Position(0, 0))],
       "peek"
     );
   }
@@ -27088,22 +26831,22 @@ var QuickPeekProvider = class {
    * Shows a quick peek explanation for the current cursor position.
    */
   async showQuickPeek() {
-    const editor = vscode9.window.activeTextEditor;
+    const editor = vscode8.window.activeTextEditor;
     if (!editor) {
-      vscode9.window.showWarningMessage("No active editor");
+      vscode8.window.showWarningMessage("No active editor");
       return;
     }
     const document = editor.document;
     const position = editor.selection.active;
     const lineText = document.lineAt(position.line).text;
     if (lineText.trim().length === 0) {
-      vscode9.window.showInformationMessage("Place cursor on a line with code");
+      vscode8.window.showInformationMessage("Place cursor on a line with code");
       return;
     }
     const { code, context } = this.contextExtractor.extract(document, position);
     let explanation = this.cacheService.get(code);
     if (!explanation) {
-      const loadingPick = vscode9.window.createQuickPick();
+      const loadingPick = vscode8.window.createQuickPick();
       loadingPick.title = "\u{1F9E0} ghia-ai";
       loadingPick.placeholder = "Generating explanation...";
       loadingPick.busy = true;
@@ -27137,15 +26880,15 @@ var QuickPeekProvider = class {
         description: "View in side panel with full formatting"
       }
     ];
-    const selection = await vscode9.window.showQuickPick(items, {
+    const selection = await vscode8.window.showQuickPick(items, {
       title: "\u{1F9E0} ghia-ai Quick Peek",
       placeHolder: explanation
     });
     if (selection?.label.includes("Copy")) {
-      await vscode9.env.clipboard.writeText(explanation);
-      vscode9.window.showInformationMessage("Copied to clipboard");
+      await vscode8.env.clipboard.writeText(explanation);
+      vscode8.window.showInformationMessage("Copied to clipboard");
     } else if (selection?.label.includes("Panel")) {
-      vscode9.commands.executeCommand("ghia-ai.explainCode", code, context);
+      vscode8.commands.executeCommand("ghia-ai.explainCode", code, context);
     }
   }
   dispose() {
@@ -27161,7 +26904,7 @@ var InlinePeekProvider = class {
   disposables = [];
   constructor() {
     this.disposables.push(
-      vscode9.window.onDidChangeTextEditorSelection((e) => {
+      vscode8.window.onDidChangeTextEditorSelection((e) => {
         if (e.textEditor === this.currentEditor) {
           this.dismissPeek();
         }
@@ -27172,7 +26915,7 @@ var InlinePeekProvider = class {
    * Shows an inline peek for the code at the current cursor position.
    */
   async showInlinePeek() {
-    const editor = vscode9.window.activeTextEditor;
+    const editor = vscode8.window.activeTextEditor;
     if (!editor) return;
     this.dismissPeek();
     this.currentEditor = editor;
@@ -27207,17 +26950,17 @@ var InlinePeekProvider = class {
    */
   showPeekDecoration(editor, line, content) {
     this.dismissPeek();
-    this.peekZoneDecoration = vscode9.window.createTextEditorDecorationType({
+    this.peekZoneDecoration = vscode8.window.createTextEditorDecorationType({
       after: {
         contentText: ` \u{1F4A1} ${content}`,
-        color: new vscode9.ThemeColor("editorCodeLens.foreground"),
+        color: new vscode8.ThemeColor("editor.foreground"),
         fontStyle: "italic",
         margin: "0 0 0 2em"
       },
       isWholeLine: true,
-      backgroundColor: new vscode9.ThemeColor("editor.hoverHighlightBackground")
+      backgroundColor: new vscode8.ThemeColor("editor.hoverHighlightBackground")
     });
-    const range = new vscode9.Range(line, 0, line, 0);
+    const range = new vscode8.Range(line, 0, line, 0);
     editor.setDecorations(this.peekZoneDecoration, [range]);
   }
   dismissPeek() {
@@ -27234,7 +26977,7 @@ var InlinePeekProvider = class {
 };
 
 // src/providers/sidePanelProvider.ts
-var vscode10 = __toESM(require("vscode"));
+var vscode9 = __toESM(require("vscode"));
 var SidePanelProvider = class {
   constructor(extensionUri) {
     this.extensionUri = extensionUri;
@@ -27257,7 +27000,7 @@ var SidePanelProvider = class {
       enableScripts: true,
       localResourceRoots: [this.extensionUri]
     };
-    const config = vscode10.workspace.getConfiguration("ghiaAI");
+    const config = vscode9.workspace.getConfiguration("ghiaAI");
     this.pythonFocus = config.get("askPythonMode", true);
     webviewView.webview.html = this.getHtml();
     webviewView.webview.onDidReceiveMessage(
@@ -27265,10 +27008,10 @@ var SidePanelProvider = class {
         switch (message.command) {
           case "copy":
             if (this.currentExplanation) {
-              await vscode10.env.clipboard.writeText(
+              await vscode9.env.clipboard.writeText(
                 this.currentExplanation.explanation
               );
-              vscode10.window.showInformationMessage("Copied to clipboard");
+              vscode9.window.showInformationMessage("Copied to clipboard");
             }
             break;
           case "refresh":
@@ -27301,15 +27044,15 @@ var SidePanelProvider = class {
     );
     this.updateView();
     this.disposables.push(
-      vscode10.window.onDidChangeActiveTextEditor(() => this.updateView()),
-      vscode10.window.onDidChangeTextEditorSelection(() => this.updateView())
+      vscode9.window.onDidChangeActiveTextEditor(() => this.updateView()),
+      vscode9.window.onDidChangeTextEditorSelection(() => this.updateView())
     );
   }
   /**
    * Explains the currently selected or cursor-adjacent code.
    */
   async explainCurrentSelection() {
-    const editor = vscode10.window.activeTextEditor;
+    const editor = vscode9.window.activeTextEditor;
     if (!editor) {
       this.showMessage("No active editor. Open a file first.");
       return;
@@ -27437,7 +27180,7 @@ var SidePanelProvider = class {
   async handleAsk(question, options) {
     const trimmed = question?.trim();
     if (!trimmed) return;
-    const editor = vscode10.window.activeTextEditor;
+    const editor = vscode9.window.activeTextEditor;
     const MAX_CHARS = 3e4;
     let contextInfo;
     if (editor) {
@@ -27552,7 +27295,7 @@ var SidePanelProvider = class {
     }
   }
   getContextHints() {
-    const editor = vscode10.window.activeTextEditor;
+    const editor = vscode9.window.activeTextEditor;
     if (!editor) {
       return {
         hasSelection: false,
@@ -28026,7 +27769,7 @@ var SidePanelProvider = class {
    */
   async toggleScope() {
     this.pythonFocus = !this.pythonFocus;
-    await vscode10.workspace.getConfiguration("ghiaAI").update("askPythonMode", this.pythonFocus, vscode10.ConfigurationTarget.Global);
+    await vscode9.workspace.getConfiguration("ghiaAI").update("askPythonMode", this.pythonFocus, vscode9.ConfigurationTarget.Global);
     this.updateView();
   }
   dispose() {
@@ -28050,7 +27793,7 @@ var FloatingPanelProvider = class {
    * Useful for pre-opening the space before asking a question.
    */
   openPanel() {
-    const config = vscode10.workspace.getConfiguration("ghiaAI");
+    const config = vscode9.workspace.getConfiguration("ghiaAI");
     this.pythonFocus = config.get("askPythonMode", true);
     this.ensurePanel();
     this.panel.webview.html = this.getWelcomeHtml();
@@ -28060,9 +27803,9 @@ var FloatingPanelProvider = class {
    * Shows explanation in a floating webview panel beside the editor.
    */
   async showExplanation(code, context) {
-    const editor = vscode10.window.activeTextEditor;
+    const editor = vscode9.window.activeTextEditor;
     if (!editor && !code) {
-      vscode10.window.showWarningMessage("No code to explain");
+      vscode9.window.showWarningMessage("No code to explain");
       return;
     }
     if (!code) {
@@ -28081,11 +27824,11 @@ var FloatingPanelProvider = class {
       }
     }
     if (!code || code.length === 0) {
-      vscode10.window.showWarningMessage("No code selected");
+      vscode9.window.showWarningMessage("No code selected");
       return;
     }
     this.ensurePanel();
-    this.panel.reveal(vscode10.ViewColumn.Beside);
+    this.panel.reveal(vscode9.ViewColumn.Beside);
     this.evenEditorWidths();
     this.panel.webview.html = this.getLoadingHtml(code);
     const languageId = editor?.document.languageId ?? "plaintext";
@@ -28106,13 +27849,13 @@ var FloatingPanelProvider = class {
   }
   ensurePanel() {
     if (this.panel) {
-      this.panel.reveal(vscode10.ViewColumn.Beside);
+      this.panel.reveal(vscode9.ViewColumn.Beside);
       return;
     }
-    this.panel = vscode10.window.createWebviewPanel(
+    this.panel = vscode9.window.createWebviewPanel(
       "ghia-ai.floatingPanel",
       "\u{1F9E0} ghia-ai",
-      vscode10.ViewColumn.Beside,
+      vscode9.ViewColumn.Beside,
       {
         enableScripts: true,
         retainContextWhenHidden: true
@@ -28128,8 +27871,8 @@ var FloatingPanelProvider = class {
     this.panel.webview.onDidReceiveMessage(
       async (message) => {
         if (message.command === "copy" && message.text) {
-          await vscode10.env.clipboard.writeText(message.text);
-          vscode10.window.showInformationMessage("Copied to clipboard");
+          await vscode9.env.clipboard.writeText(message.text);
+          vscode9.window.showInformationMessage("Copied to clipboard");
         } else if (message.command === "ask" && typeof message.text === "string") {
           await this.handleAsk(message.text, {
             includeSelection: Boolean(message.includeSelection),
@@ -28147,7 +27890,7 @@ var FloatingPanelProvider = class {
     );
   }
   evenEditorWidths() {
-    void vscode10.commands.executeCommand("workbench.action.evenEditorWidths");
+    void vscode9.commands.executeCommand("workbench.action.evenEditorWidths");
   }
   getWelcomeHtml() {
     return `<!DOCTYPE html>
@@ -28287,10 +28030,10 @@ var FloatingPanelProvider = class {
   }
   async handleAsk(question, opts) {
     if (!question || !question.trim()) {
-      vscode10.window.showWarningMessage("Enter a question to ask ghia-ai.");
+      vscode9.window.showWarningMessage("Enter a question to ask ghia-ai.");
       return;
     }
-    const editor = vscode10.window.activeTextEditor;
+    const editor = vscode9.window.activeTextEditor;
     const doc = editor?.document;
     const selectionText = opts.includeSelection && editor && !editor.selection.isEmpty ? editor.document.getText(editor.selection).trim() : "";
     const includeFile = opts.includeFile && doc;
@@ -28537,7 +28280,7 @@ ${lines.join("\n")}
    */
   async toggleScope() {
     this.pythonFocus = !this.pythonFocus;
-    await vscode10.workspace.getConfiguration("ghiaAI").update("askPythonMode", this.pythonFocus, vscode10.ConfigurationTarget.Global);
+    await vscode9.workspace.getConfiguration("ghiaAI").update("askPythonMode", this.pythonFocus, vscode9.ConfigurationTarget.Global);
     if (this.panel) {
       this.panel.webview.html = this.renderChatHtml();
     }
@@ -28552,13 +28295,13 @@ ${lines.join("\n")}
 var PrototypeManager = class {
   constructor(context) {
     this.context = context;
-    void vscode11.commands.executeCommand(
+    void vscode10.commands.executeCommand(
       "setContext",
       "ghiaAI.prototype.sidePanelEnabled",
       true
     );
-    this.statusBarItem = vscode11.window.createStatusBarItem(
-      vscode11.StatusBarAlignment.Right,
+    this.statusBarItem = vscode10.window.createStatusBarItem(
+      vscode10.StatusBarAlignment.Right,
       99
     );
     this.statusBarItem.command = "ghia-ai.prototype.selectMode";
@@ -28567,7 +28310,7 @@ var PrototypeManager = class {
     this.registerCommands();
     this.loadConfiguration();
     this.disposables.push(
-      vscode11.workspace.onDidChangeConfiguration((e) => {
+      vscode10.workspace.onDidChangeConfiguration((e) => {
         if (e.affectsConfiguration("ghiaAI.prototype")) {
           this.loadConfiguration();
         }
@@ -28576,14 +28319,12 @@ var PrototypeManager = class {
   }
   disposables = [];
   // Provider instances
-  codeLensProvider = null;
   peekProvider = null;
   quickPeekProvider = null;
   inlinePeekProvider = null;
   sidePanelProvider = null;
   floatingPanelProvider = null;
   // Registration disposables (for toggling providers)
-  codeLensRegistration = null;
   // Current active mode
   currentMode = "hover";
   // Status bar item for showing current mode
@@ -28592,7 +28333,6 @@ var PrototypeManager = class {
    * Initializes all provider instances.
    */
   initializeProviders() {
-    this.codeLensProvider = new CodeLensExplainProvider();
     this.peekProvider = new PeekExplanationProvider();
     this.quickPeekProvider = new QuickPeekProvider();
     this.inlinePeekProvider = new InlinePeekProvider();
@@ -28600,13 +28340,12 @@ var PrototypeManager = class {
     this.floatingPanelProvider = new FloatingPanelProvider(
       this.context.extensionUri
     );
-    const sidePanelRegistration = vscode11.window.registerWebviewViewProvider(
+    const sidePanelRegistration = vscode10.window.registerWebviewViewProvider(
       SidePanelProvider.viewType,
       this.sidePanelProvider
     );
     this.disposables.push(sidePanelRegistration);
     this.disposables.push(
-      this.codeLensProvider,
       this.peekProvider,
       this.quickPeekProvider,
       this.inlinePeekProvider,
@@ -28618,68 +28357,54 @@ var PrototypeManager = class {
    * Registers all commands for the prototype manager.
    */
   registerCommands() {
-    const commands8 = [
+    const commands7 = [
       // Mode selection
-      vscode11.commands.registerCommand(
+      vscode10.commands.registerCommand(
         "ghia-ai.prototype.selectMode",
         () => this.showModeSelector()
       ),
-      vscode11.commands.registerCommand(
+      vscode10.commands.registerCommand(
         "ghia-ai.prototype.setMode",
         (mode) => this.setMode(mode)
       ),
-      // CodeLens commands
-      vscode11.commands.registerCommand(
-        "ghia-ai.explainCodeLens",
-        (code, context, languageId) => this.codeLensProvider?.handleExplainClick(code, context, languageId)
-      ),
-      vscode11.commands.registerCommand(
-        "ghia-ai.showExplanation",
-        (explanation, code) => this.codeLensProvider?.showExplanation(explanation, code)
-      ),
       // Peek explanation command (opens in VS Code peek view)
-      vscode11.commands.registerCommand(
+      vscode10.commands.registerCommand(
         "ghia-ai.peekExplanation",
         () => this.peekProvider?.showPeekExplanation()
       ),
       // Quick peek command
-      vscode11.commands.registerCommand(
+      vscode10.commands.registerCommand(
         "ghia-ai.quickPeek",
         () => this.quickPeekProvider?.showQuickPeek()
       ),
       // Inline peek command
-      vscode11.commands.registerCommand(
+      vscode10.commands.registerCommand(
         "ghia-ai.inlinePeek",
         () => this.inlinePeekProvider?.showInlinePeek()
       ),
       // Side panel command
-      vscode11.commands.registerCommand(
+      vscode10.commands.registerCommand(
         "ghia-ai.explainInPanel",
         () => this.sidePanelProvider?.explainCurrentSelection()
       ),
       // Floating panel command
-      vscode11.commands.registerCommand(
+      vscode10.commands.registerCommand(
         "ghia-ai.explainFloating",
         (code, context) => this.floatingPanelProvider?.showExplanation(code, context)
       ),
-      vscode11.commands.registerCommand(
+      vscode10.commands.registerCommand(
         "ghia-ai.openWidePanel",
         () => this.floatingPanelProvider?.openPanel()
-      ),
-      // Toggle commands
-      vscode11.commands.registerCommand(
-        "ghia-ai.prototype.toggleCodeLens",
-        () => this.toggleCodeLens()
       )
     ];
-    this.disposables.push(...commands8);
+    this.disposables.push(...commands7);
   }
   /**
    * Loads configuration and applies the active mode.
    * Only reads config - does not write back to avoid recursive change events.
    */
   loadConfiguration() {
-    const config = vscode11.workspace.getConfiguration("ghiaAI.prototype");
+    const config = vscode10.workspace.getConfiguration("ghiaAI.prototype");
     const mode = config.get("mode", "hover");
     this.applyMode(mode);
   }
@@ -28694,13 +28419,6 @@ var PrototypeManager = class {
         detail: "Shows explanations in native VS Code hover. May conflict with other hovers.",
         mode: "hover",
         picked: this.currentMode === "hover"
-      },
-      {
-        label: "$(symbol-method) CodeLens",
-        description: "Inline clickable annotations",
-        detail: "Shows 'Explain' links above functions/classes. Click to see explanation.",
-        mode: "codelens",
-        picked: this.currentMode === "codelens"
       },
       {
         label: "$(eye) Peek View",
@@ -28736,22 +28454,15 @@ var PrototypeManager = class {
         detail: "Opens explanation in a panel next to your code.",
         mode: "floatingpanel",
         picked: this.currentMode === "floatingpanel"
-      },
-      {
-        label: "$(layers) Hybrid",
-        description: "CodeLens + Side Panel",
-        detail: "Combines CodeLens annotations with the side panel for detailed views.",
-        mode: "hybrid",
-        picked: this.currentMode === "hybrid"
       }
     ];
-    const selection = await vscode11.window.showQuickPick(items, {
+    const selection = await vscode10.window.showQuickPick(items, {
       title: "\u{1F9E0} ghia-ai - Select UI Mode",
       placeHolder: `Current mode: ${this.currentMode}`
     });
     if (selection) {
       await this.setMode(selection.mode);
-      vscode11.window.showInformationMessage(
+      vscode10.window.showInformationMessage(
         `ghia-ai mode set to: ${selection.label.replace(/\$\([^)]+\)\s*/, "")}`
       );
     }
@@ -28761,11 +28472,11 @@ var PrototypeManager = class {
    * Call this for user-initiated mode changes only.
    */
   async setMode(mode) {
-    const config = vscode11.workspace.getConfiguration("ghiaAI.prototype");
+    const config = vscode10.workspace.getConfiguration("ghiaAI.prototype");
     const storedMode = config.get("mode");
     this.applyMode(mode);
     if (storedMode !== mode) {
-      await config.update("mode", mode, vscode11.ConfigurationTarget.Global);
+      await config.update("mode", mode, vscode10.ConfigurationTarget.Global);
     }
   }
   /**
@@ -28779,10 +28490,6 @@ var PrototypeManager = class {
       case "hover":
         this.updateStatusBar("$(comment-discussion)", "Hover Mode");
         break;
-      case "codelens":
-        this.enableCodeLensMode();
-        this.updateStatusBar("$(symbol-method)", "CodeLens Mode");
-        break;
       case "peek":
         this.enablePeekMode();
         this.updateStatusBar("$(eye)", "Peek Mode");
@@ -28795,26 +28502,12 @@ var PrototypeManager = class {
         break;
       case "sidepanel":
         this.updateStatusBar("$(layout-sidebar-right)", "Side Panel Mode");
-        vscode11.commands.executeCommand("ghia-ai.explanationPanel.focus");
+        vscode10.commands.executeCommand("ghia-ai.explanationPanel.focus");
         break;
       case "floatingpanel":
         this.updateStatusBar("$(window)", "Floating Panel Mode");
         break;
-      case "hybrid":
-        this.enableCodeLensMode();
-        this.updateStatusBar("$(layers)", "Hybrid Mode");
-        break;
     }
-  }
-  /**
-   * Enables CodeLens mode by registering the CodeLens provider.
-   */
-  enableCodeLensMode() {
-    if (!this.codeLensProvider) return;
-    this.codeLensRegistration = vscode11.languages.registerCodeLensProvider(
-      [{ scheme: "file" }, { scheme: "untitled" }],
-      this.codeLensProvider
-    );
   }
   /**
    * Enables Peek mode.
@@ -28824,24 +28517,9 @@ var PrototypeManager = class {
   enablePeekMode() {
   }
   /**
-   * Toggles CodeLens on/off regardless of current mode.
-   */
-  toggleCodeLens() {
-    if (this.codeLensRegistration) {
-      this.codeLensRegistration.dispose();
-      this.codeLensRegistration = null;
-      vscode11.window.showInformationMessage("ghia-ai explanations disabled");
-    } else {
-      this.enableCodeLensMode();
-      vscode11.window.showInformationMessage("ghia-ai explanations enabled");
-    }
-  }
-  /**
    * Cleans up all provider registrations.
    */
   cleanupRegistrations() {
-    this.codeLensRegistration?.dispose();
-    this.codeLensRegistration = null;
   }
   /**
    * Updates the status bar item.
@@ -28875,12 +28553,9 @@ Click to change mode`;
       case "floatingpanel":
         await this.floatingPanelProvider?.showExplanation();
         break;
-      case "hybrid":
-        await this.sidePanelProvider?.explainCurrentSelection();
-        break;
       default:
-        vscode11.window.showInformationMessage(
-          `In ${this.currentMode} mode, hover over code or use the CodeLens links.`
+        vscode10.window.showInformationMessage(
+          `In ${this.currentMode} mode, hover or run a ghia-ai command to see explanations.`
         );
     }
   }
@@ -28891,10 +28566,10 @@ Click to change mode`;
 };
 
 // src/experimental/experimentExtension.ts
-var vscode13 = __toESM(require("vscode"));
+var vscode12 = __toESM(require("vscode"));
 
 // src/experimental/experimentalHoverProviders.ts
-var vscode12 = __toESM(require("vscode"));
+var vscode11 = __toESM(require("vscode"));
 var NullReturningHoverProvider = class {
   provideHover(document, position, _token) {
     console.log(
@@ -28914,12 +28589,12 @@ var AlwaysReturnHoverProvider = class {
     );
     const lineText = document.lineAt(position.line).text;
     if (lineText.trim().length > 0) {
-      const md = new vscode12.MarkdownString();
+      const md = new vscode11.MarkdownString();
       md.appendMarkdown("**\u{1F9EA} Experiment 2: Custom Hover**\n\n");
       md.appendMarkdown(
         `Line ${position.line + 1}, Column ${position.character + 1}`
       );
-      return new vscode12.Hover(md);
+      return new vscode11.Hover(md);
     }
     return null;
   }
@@ -28934,10 +28609,10 @@ var ConditionalHoverProvider = class {
     );
     const trimmedLine = lineText.trim();
     if (trimmedLine.startsWith("function ") || trimmedLine.startsWith("const ") || trimmedLine.startsWith("class ") || trimmedLine.startsWith("export ")) {
-      const md = new vscode12.MarkdownString();
+      const md = new vscode11.MarkdownString();
       md.appendMarkdown("**\u{1F9EA} Experiment 3: Conditional Match**\n\n");
       md.appendMarkdown(`Matched pattern on line ${position.line + 1}`);
-      return new vscode12.Hover(md);
+      return new vscode11.Hover(md);
     }
     return null;
   }
@@ -28951,10 +28626,10 @@ var FirstHoverProvider = class {
     );
     const lineText = document.lineAt(position.line).text;
     if (lineText.trim().length > 0) {
-      const md = new vscode12.MarkdownString();
+      const md = new vscode11.MarkdownString();
       md.appendMarkdown("**\u{1F947} First Provider**\n\n");
       md.appendMarkdown("Registered first in the chain.");
-      return new vscode12.Hover(md);
+      return new vscode11.Hover(md);
     }
     return null;
   }
@@ -28968,10 +28643,10 @@ var SecondHoverProvider = class {
     );
     const lineText = document.lineAt(position.line).text;
     if (lineText.trim().length > 0) {
-      const md = new vscode12.MarkdownString();
+      const md = new vscode11.MarkdownString();
       md.appendMarkdown("**\u{1F948} Second Provider**\n\n");
       md.appendMarkdown("Registered second in the chain.");
-      return new vscode12.Hover(md);
+      return new vscode11.Hover(md);
     }
     return null;
   }
@@ -28985,10 +28660,10 @@ var ThirdHoverProvider = class {
     );
     const lineText = document.lineAt(position.line).text;
     if (lineText.includes("import") || lineText.includes("export")) {
-      const md = new vscode12.MarkdownString();
+      const md = new vscode11.MarkdownString();
       md.appendMarkdown("**\u{1F949} Third Provider (Conditional)**\n\n");
       md.appendMarkdown("Only shows for import/export statements.");
-      return new vscode12.Hover(md);
+      return new vscode11.Hover(md);
     }
     return null;
   }
@@ -29002,10 +28677,10 @@ var HighPriorityHoverProvider = class {
     );
     const lineText = document.lineAt(position.line).text;
     if (lineText.trim().length > 0) {
-      const md = new vscode12.MarkdownString();
+      const md = new vscode11.MarkdownString();
       md.appendMarkdown("**\u26A1 High Priority Provider**\n\n");
       md.appendMarkdown("Registered with high priority intent.");
-      return new vscode12.Hover(md);
+      return new vscode11.Hover(md);
     }
     return null;
   }
@@ -29030,10 +28705,10 @@ var AsyncHoverProvider = class {
       console.log("[Experiment 6] Cancelled during async wait");
       return null;
     }
-    const md = new vscode12.MarkdownString();
+    const md = new vscode11.MarkdownString();
     md.appendMarkdown("**\u23F1\uFE0F Async Provider**\n\n");
     md.appendMarkdown("This provider waited 500ms before responding.");
-    return new vscode12.Hover(md);
+    return new vscode11.Hover(md);
   }
 };
 var UndefinedReturningHoverProvider = class {
@@ -29055,7 +28730,7 @@ var EmptyContentHoverProvider = class {
     );
     const lineText = document.lineAt(position.line).text;
     if (lineText.trim().length > 0) {
-      return new vscode12.Hover(new vscode12.MarkdownString(""));
+      return new vscode11.Hover(new vscode11.MarkdownString(""));
     }
     return null;
   }
@@ -29129,7 +28804,7 @@ function runExperiment(mode) {
   clearExperiments();
   const providers = getExperimentalProviders(mode);
   providers.forEach((provider, index) => {
-    const disposable = vscode13.languages.registerHoverProvider(
+    const disposable = vscode12.languages.registerHoverProvider(
       HOVER_SELECTOR,
       provider
     );
@@ -29140,7 +28815,7 @@ function runExperiment(mode) {
   });
   currentMode = mode;
   updateStatusBar();
-  vscode13.window.showInformationMessage(
+  vscode12.window.showInformationMessage(
     `\u{1F9EA} Experiment "${mode}" active with ${providers.length} provider(s). Check console for logs.`
   );
 }
@@ -29150,7 +28825,7 @@ function updateStatusBar() {
     statusBarItem.text = `$(beaker) Exp: ${currentMode}`;
     statusBarItem.tooltip = `Hover Experiment Mode: ${currentMode}
 Click to change or stop`;
-    statusBarItem.backgroundColor = new vscode13.ThemeColor(
+    statusBarItem.backgroundColor = new vscode12.ThemeColor(
       "statusBarItem.warningBackground"
     );
   } else {
@@ -29166,7 +28841,7 @@ async function showExperimentMenu() {
       description: "Clear all experimental providers",
       detail: "Removes all experimental hover providers, allowing only VS Code defaults"
     },
-    { kind: vscode13.QuickPickItemKind.Separator, label: "Experiments" },
+    { kind: vscode12.QuickPickItemKind.Separator, label: "Experiments" },
     {
       label: "1. Null Returning",
       description: "Test: Does returning null allow VS Code defaults?",
@@ -29218,14 +28893,14 @@ async function showExperimentMenu() {
       detail: "Returns Hover with empty MarkdownString"
     }
   ];
-  const selection = await vscode13.window.showQuickPick(items, {
+  const selection = await vscode12.window.showQuickPick(items, {
     placeHolder: "Select an experiment to run",
     title: "\u{1F9EA} Hover Provider Experiments"
   });
   if (!selection) return;
   if (selection.label.includes("Stop Experiment")) {
     clearExperiments();
-    vscode13.window.showInformationMessage(
+    vscode12.window.showInformationMessage(
       "\u{1F9EA} Experiment stopped. Only VS Code defaults active."
     );
     return;
@@ -29254,13 +28929,13 @@ function logExperimentStatus() {
   console.log(`Mode: ${currentMode ?? "None"}`);
   console.log(`Active providers: ${experimentDisposables.length}`);
   console.log("===============================");
-  vscode13.window.showInformationMessage(
+  vscode12.window.showInformationMessage(
     `Current experiment: ${currentMode ?? "None"} (${experimentDisposables.length} providers)`
   );
 }
 function activateExperiments(context) {
-  statusBarItem = vscode13.window.createStatusBarItem(
-    vscode13.StatusBarAlignment.Left,
+  statusBarItem = vscode12.window.createStatusBarItem(
+    vscode12.StatusBarAlignment.Left,
     100
   );
   statusBarItem.command = "ghia-ai.experiment.menu";
@@ -29289,7 +28964,7 @@ var aiService = new AIService();
 var askStatusBar;
 var panelStatusBar;
 function activate(context) {
-  const hoverProvider = new CodeLensHoverProvider();
+  const hoverProvider = new GhiaHoverProvider();
   const sm = new StateManager(context);
   const mm = new MenuManager(sm, context);
   const sbm = new StatusBarManager(sm, mm);
@@ -29298,7 +28973,7 @@ function activate(context) {
   statusBarManager = sbm;
   context.subscriptions.push(sm, mm, sbm, hoverProvider);
   function registerHover() {
-    return vscode14.languages.registerHoverProvider(
+    return vscode13.languages.registerHoverProvider(
       HOVER_SELECTOR2,
       hoverProvider
     );
@@ -29323,7 +28998,7 @@ function activate(context) {
   context.subscriptions.push(stateChangeSubscription);
   sbm.registerClickHandler(context);
   sbm.show();
-  const commandDisposable = vscode14.commands.registerCommand(
+  const commandDisposable = vscode13.commands.registerCommand(
     "ghia-ai.explainCode",
     (codeOrArgs, ctx) => {
       let code;
@@ -29339,17 +29014,17 @@ function activate(context) {
     }
   );
   context.subscriptions.push(commandDisposable);
-  const retryHoverCommandDisposable = vscode14.commands.registerCommand(
+  const retryHoverCommandDisposable = vscode13.commands.registerCommand(
     "ghia-ai.retryHoverExplanation",
     (code, context2) => {
       hoverProvider.retryExplanation(code ?? "", context2 ?? "");
     }
   );
   context.subscriptions.push(retryHoverCommandDisposable);
-  const welcomeSubscription = vscode14.workspace.onDidOpenTextDocument(() => {
+  const welcomeSubscription = vscode13.workspace.onDidOpenTextDocument(() => {
     if (sm.hasShownWelcome()) return;
     const message = "\u{1F44B} Welcome to ghia-ai! Click the icon in the status bar to configure your local Ollama model and get started.";
-    void vscode14.window.showInformationMessage(message, "Configure Now").then((selection) => {
+    void vscode13.window.showInformationMessage(message, "Configure Now").then((selection) => {
       void sm.markWelcomeShown();
       if (selection === "Configure Now") {
         mm.showMainMenu();
@@ -29357,16 +29032,16 @@ function activate(context) {
     });
   });
   context.subscriptions.push(welcomeSubscription);
-  const askCommand = vscode14.commands.registerCommand(
+  const askCommand = vscode13.commands.registerCommand(
     "ghia-ai.askAI",
     async () => {
-      const question = await vscode14.window.showInputBox({
+      const question = await vscode13.window.showInputBox({
         prompt: "Ask your local model a question",
         placeHolder: "Explain random.sample() with examples"
       });
       if (!question) return;
       const includeFile = /\b(current file|this file|in this file|here)\b/i.test(question);
-      const editor = vscode14.window.activeTextEditor;
+      const editor = vscode13.window.activeTextEditor;
       const doc = editor?.document;
       const MAX_CHARS = 3e4;
       let contextInfo;
@@ -29381,9 +29056,9 @@ function activate(context) {
         };
       }
       try {
-        const answer = await vscode14.window.withProgress(
+        const answer = await vscode13.window.withProgress(
           {
-            location: vscode14.ProgressLocation.Notification,
+            location: vscode13.ProgressLocation.Notification,
             title: "ghia-ai",
             cancellable: false
           },
@@ -29392,13 +29067,13 @@ function activate(context) {
         showAnswerPanel(answer, `ghia-ai: ${question}`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        void vscode14.window.showErrorMessage(`ghia-ai: ${msg}`);
+        void vscode13.window.showErrorMessage(`ghia-ai: ${msg}`);
       }
     }
   );
   context.subscriptions.push(askCommand);
-  askStatusBar = vscode14.window.createStatusBarItem(
-    vscode14.StatusBarAlignment.Right,
+  askStatusBar = vscode13.window.createStatusBarItem(
+    vscode13.StatusBarAlignment.Right,
     90
   );
   askStatusBar.text = "$(comment-discussion) Ask AI";
@@ -29406,8 +29081,8 @@ function activate(context) {
   askStatusBar.command = "ghia-ai.askAI";
   askStatusBar.show();
   context.subscriptions.push(askStatusBar);
-  panelStatusBar = vscode14.window.createStatusBarItem(
-    vscode14.StatusBarAlignment.Right,
+  panelStatusBar = vscode13.window.createStatusBarItem(
+    vscode13.StatusBarAlignment.Right,
     88
   );
   panelStatusBar.text = "$(layout-sidebar-right) ghia-ai";
@@ -29415,41 +29090,41 @@ function activate(context) {
   panelStatusBar.command = "ghia-ai.openPanel";
   panelStatusBar.show();
   context.subscriptions.push(panelStatusBar);
-  const config = vscode14.workspace.getConfiguration("ghiaAI");
+  const config = vscode13.workspace.getConfiguration("ghiaAI");
   const experimentsEnabled = config.get("enableExperiments", false);
   if (experimentsEnabled) {
     activateExperiments(context);
   }
   const experimentDisabledMessage = 'Experiments are disabled. Enable them in settings: "ghiaAI.enableExperiments": true';
   function isExperimentsEnabled() {
-    return vscode14.workspace.getConfiguration("ghiaAI").get("enableExperiments", false);
+    return vscode13.workspace.getConfiguration("ghiaAI").get("enableExperiments", false);
   }
-  const experimentMenuCommand = vscode14.commands.registerCommand(
+  const experimentMenuCommand = vscode13.commands.registerCommand(
     "ghia-ai.experiment.menu",
     () => {
       if (!isExperimentsEnabled()) {
-        void vscode14.window.showInformationMessage(experimentDisabledMessage);
+        void vscode13.window.showInformationMessage(experimentDisabledMessage);
         return;
       }
       void showExperimentMenu();
     }
   );
-  const experimentStopCommand = vscode14.commands.registerCommand(
+  const experimentStopCommand = vscode13.commands.registerCommand(
     "ghia-ai.experiment.stop",
     () => {
       if (!isExperimentsEnabled()) {
-        void vscode14.window.showInformationMessage(experimentDisabledMessage);
+        void vscode13.window.showInformationMessage(experimentDisabledMessage);
         return;
       }
       clearExperiments();
-      void vscode14.window.showInformationMessage("\u{1F9EA} Experiment stopped.");
+      void vscode13.window.showInformationMessage("\u{1F9EA} Experiment stopped.");
     }
   );
-  const experimentStatusCommand = vscode14.commands.registerCommand(
+  const experimentStatusCommand = vscode13.commands.registerCommand(
     "ghia-ai.experiment.status",
     () => {
       if (!isExperimentsEnabled()) {
-        void vscode14.window.showInformationMessage(experimentDisabledMessage);
+        void vscode13.window.showInformationMessage(experimentDisabledMessage);
         return;
       }
       logExperimentStatus();
@@ -29468,11 +29143,11 @@ function activate(context) {
     "empty-content"
   ];
   const experimentRunCommands = experimentModes.map(
-    (mode) => vscode14.commands.registerCommand(
+    (mode) => vscode13.commands.registerCommand(
       `ghia-ai.experiment.run.${mode}`,
       () => {
         if (!isExperimentsEnabled()) {
-          void vscode14.window.showInformationMessage(experimentDisabledMessage);
+          void vscode13.window.showInformationMessage(experimentDisabledMessage);
           return;
         }
         runExperiment(mode);
@@ -29487,10 +29162,10 @@ function activate(context) {
   );
   prototypeManager = new PrototypeManager(context);
   context.subscriptions.push(prototypeManager);
-  const openPanelCommand = vscode14.commands.registerCommand(
+  const openPanelCommand = vscode13.commands.registerCommand(
     "ghia-ai.openPanel",
     async () => {
-      await vscode14.commands.executeCommand("ghia-ai.openWidePanel");
+      await vscode13.commands.executeCommand("ghia-ai.openWidePanel");
     }
   );
   context.subscriptions.push(openPanelCommand);
@@ -29515,10 +29190,10 @@ function deactivate() {
   panelStatusBar = void 0;
 }
 function showAnswerPanel(markdown, title) {
-  const panel = vscode14.window.createWebviewPanel(
+  const panel = vscode13.window.createWebviewPanel(
     "ghiaAiAnswer",
     title,
-    vscode14.ViewColumn.Beside,
+    vscode13.ViewColumn.Beside,
     { enableScripts: false }
   );
   const html = `<!DOCTYPE html>

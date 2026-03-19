@@ -25,7 +25,7 @@ const DETAILED_LINE_RANGE = 15;
  * User must re-hover to see the result after the fetch completes.
  * Applies a visual highlight to the hovered code block and clears it when the cursor moves away.
  */
-export class CodeLensHoverProvider
+export class GhiaHoverProvider
   implements vscode.HoverProvider, vscode.Disposable
 {
   private readonly aiService = new AIService();

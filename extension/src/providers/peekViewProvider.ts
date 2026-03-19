@@ -409,7 +409,7 @@ export class InlinePeekProvider implements vscode.Disposable {
     this.peekZoneDecoration = vscode.window.createTextEditorDecorationType({
       after: {
         contentText: ` 💡 ${content}`,
-        color: new vscode.ThemeColor("editorCodeLens.foreground"),
+        color: new vscode.ThemeColor("editor.foreground"),
         fontStyle: "italic",
         margin: "0 0 0 2em",
       },
