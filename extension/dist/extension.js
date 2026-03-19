@@ -1138,14 +1138,14 @@ var require_util = __commonJS({
         }
         const port = url.port != null ? url.port : url.protocol === "https:" ? 443 : 80;
         let origin = url.origin != null ? url.origin : `${url.protocol || ""}//${url.hostname || ""}:${port}`;
-        let path = url.path != null ? url.path : `${url.pathname || ""}${url.search || ""}`;
+        let path2 = url.path != null ? url.path : `${url.pathname || ""}${url.search || ""}`;
         if (origin[origin.length - 1] === "/") {
           origin = origin.slice(0, origin.length - 1);
         }
-        if (path && path[0] !== "/") {
-          path = `/${path}`;
+        if (path2 && path2[0] !== "/") {
+          path2 = `/${path2}`;
         }
-        return new URL(`${origin}${path}`);
+        return new URL(`${origin}${path2}`);
       }
       if (!isHttpOrHttpsPrefixed(url.origin || url.protocol)) {
         throw new InvalidArgumentError("Invalid URL protocol: the URL must start with `http:` or `https:`.");
@@ -1956,9 +1956,9 @@ var require_diagnostics = __commonJS({
         "undici:client:sendHeaders",
         (evt) => {
           const {
-            request: { method, path, origin }
+            request: { method, path: path2, origin }
           } = evt;
-          debugLog("sending request to %s %s%s", method, origin, path);
+          debugLog("sending request to %s %s%s", method, origin, path2);
         }
       );
     }
@@ -1976,14 +1976,14 @@ var require_diagnostics = __commonJS({
         "undici:request:headers",
         (evt) => {
           const {
-            request: { method, path, origin },
+            request: { method, path: path2, origin },
             response: { statusCode }
           } = evt;
           debugLog(
             "received response to %s %s%s - HTTP %d",
             method,
             origin,
-            path,
+            path2,
             statusCode
           );
         }
@@ -1992,23 +1992,23 @@ var require_diagnostics = __commonJS({
         "undici:request:trailers",
         (evt) => {
           const {
-            request: { method, path, origin }
+            request: { method, path: path2, origin }
           } = evt;
-          debugLog("trailers received from %s %s%s", method, origin, path);
+          debugLog("trailers received from %s %s%s", method, origin, path2);
         }
       );
       diagnosticsChannel.subscribe(
         "undici:request:error",
         (evt) => {
           const {
-            request: { method, path, origin },
+            request: { method, path: path2, origin },
             error
           } = evt;
           debugLog(
             "request to %s %s%s errored - %s",
             method,
             origin,
-            path,
+            path2,
             error.message
           );
         }
@@ -2109,7 +2109,7 @@ var require_request = __commonJS({
     var kHandler = /* @__PURE__ */ Symbol("handler");
     var Request = class {
       constructor(origin, {
-        path,
+        path: path2,
         method,
         body,
         headers,
@@ -2126,11 +2126,11 @@ var require_request = __commonJS({
         maxRedirections,
         typeOfService
       }, handler) {
-        if (typeof path !== "string") {
+        if (typeof path2 !== "string") {
           throw new InvalidArgumentError("path must be a string");
-        } else if (path[0] !== "/" && !(path.startsWith("http://") || path.startsWith("https://")) && method !== "CONNECT") {
+        } else if (path2[0] !== "/" && !(path2.startsWith("http://") || path2.startsWith("https://")) && method !== "CONNECT") {
           throw new InvalidArgumentError("path must be an absolute URL or start with a slash");
-        } else if (invalidPathRegex.test(path)) {
+        } else if (invalidPathRegex.test(path2)) {
           throw new InvalidArgumentError("invalid request path");
         }
         if (typeof method !== "string") {
@@ -2205,7 +2205,7 @@ var require_request = __commonJS({
         this.completed = false;
         this.aborted = false;
         this.upgrade = upgrade || null;
-        this.path = query ? serializePathWithQuery(path, query) : path;
+        this.path = query ? serializePathWithQuery(path2, query) : path2;
         this.origin = origin;
         this.protocol = getProtocolFromUrlString(origin);
         this.idempotent = idempotent == null ? method === "HEAD" || method === "GET" : idempotent;
@@ -7238,7 +7238,7 @@ var require_client_h1 = __commonJS({
       return method !== "GET" && method !== "HEAD" && method !== "OPTIONS" && method !== "TRACE" && method !== "CONNECT";
     }
     function writeH1(client, request) {
-      const { method, path, host, upgrade, blocking, reset } = request;
+      const { method, path: path2, host, upgrade, blocking, reset } = request;
       let { body, headers, contentLength } = request;
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH" || method === "QUERY" || method === "PROPFIND" || method === "PROPPATCH";
       if (util.isFormDataLike(body)) {
@@ -7307,7 +7307,7 @@ var require_client_h1 = __commonJS({
       if (socket.setTypeOfService) {
         socket.setTypeOfService(request.typeOfService);
       }
-      let header = `${method} ${path} HTTP/1.1\r
+      let header = `${method} ${path2} HTTP/1.1\r
 `;
       if (typeof host === "string") {
         header += `host: ${host}\r
@@ -7960,7 +7960,7 @@ var require_client_h2 = __commonJS({
     function writeH2(client, request) {
       const requestTimeout = request.bodyTimeout ?? client[kBodyTimeout];
       const session = client[kHTTP2Session];
-      const { method, path, host, upgrade, expectContinue, signal, protocol, headers: reqHeaders } = request;
+      const { method, path: path2, host, upgrade, expectContinue, signal, protocol, headers: reqHeaders } = request;
       let { body } = request;
       if (upgrade != null && upgrade !== "websocket") {
         util.errorRequest(client, request, new InvalidArgumentError(`Custom upgrade "${upgrade}" not supported over HTTP/2`));
@@ -8028,7 +8028,7 @@ var require_client_h2 = __commonJS({
           }
           headers[HTTP2_HEADER_METHOD] = "CONNECT";
           headers[HTTP2_HEADER_PROTOCOL] = "websocket";
-          headers[HTTP2_HEADER_PATH] = path;
+          headers[HTTP2_HEADER_PATH] = path2;
           if (protocol === "ws:" || protocol === "wss:") {
             headers[HTTP2_HEADER_SCHEME] = protocol === "ws:" ? "http" : "https";
           } else {
@@ -8069,7 +8069,7 @@ var require_client_h2 = __commonJS({
         stream.setTimeout(requestTimeout);
         return true;
       }
-      headers[HTTP2_HEADER_PATH] = path;
+      headers[HTTP2_HEADER_PATH] = path2;
       headers[HTTP2_HEADER_SCHEME] = protocol === "http:" ? "http" : "https";
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH";
       if (body && typeof body.read === "function") {
@@ -10366,10 +10366,10 @@ var require_proxy_agent = __commonJS({
         };
         const {
           origin,
-          path = "/",
+          path: path2 = "/",
           headers = {}
         } = opts;
-        opts.path = origin + path;
+        opts.path = origin + path2;
         if (!("host" in headers) && !("Host" in headers)) {
           const { host } = new URL(origin);
           headers.host = host;
@@ -12430,20 +12430,20 @@ var require_mock_utils = __commonJS({
       }
       return normalizedQp;
     }
-    function safeUrl(path) {
-      if (typeof path !== "string") {
-        return path;
+    function safeUrl(path2) {
+      if (typeof path2 !== "string") {
+        return path2;
       }
-      const pathSegments = path.split("?", 3);
+      const pathSegments = path2.split("?", 3);
       if (pathSegments.length !== 2) {
-        return path;
+        return path2;
       }
       const qp = new URLSearchParams(pathSegments.pop());
       qp.sort();
       return [...pathSegments, qp.toString()].join("?");
     }
-    function matchKey(mockDispatch2, { path, method, body, headers }) {
-      const pathMatch = matchValue(mockDispatch2.path, path);
+    function matchKey(mockDispatch2, { path: path2, method, body, headers }) {
+      const pathMatch = matchValue(mockDispatch2.path, path2);
       const methodMatch = matchValue(mockDispatch2.method, method);
       const bodyMatch = typeof mockDispatch2.body !== "undefined" ? matchValue(mockDispatch2.body, body) : true;
       const headersMatch = matchHeaders(mockDispatch2, headers);
@@ -12468,8 +12468,8 @@ var require_mock_utils = __commonJS({
       const basePath = key.query ? serializePathWithQuery(key.path, key.query) : key.path;
       const resolvedPath = typeof basePath === "string" ? safeUrl(basePath) : basePath;
       const resolvedPathWithoutTrailingSlash = removeTrailingSlash(resolvedPath);
-      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path, ignoreTrailingSlash }) => {
-        return ignoreTrailingSlash ? matchValue(removeTrailingSlash(safeUrl(path)), resolvedPathWithoutTrailingSlash) : matchValue(safeUrl(path), resolvedPath);
+      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path2, ignoreTrailingSlash }) => {
+        return ignoreTrailingSlash ? matchValue(removeTrailingSlash(safeUrl(path2)), resolvedPathWithoutTrailingSlash) : matchValue(safeUrl(path2), resolvedPath);
       });
       if (matchedMockDispatches.length === 0) {
         throw new MockNotMatchedError(`Mock dispatch not matched for path '${resolvedPath}'`);
@@ -12507,19 +12507,19 @@ var require_mock_utils = __commonJS({
         mockDispatches.splice(index, 1);
       }
     }
-    function removeTrailingSlash(path) {
-      while (path.endsWith("/")) {
-        path = path.slice(0, -1);
+    function removeTrailingSlash(path2) {
+      while (path2.endsWith("/")) {
+        path2 = path2.slice(0, -1);
       }
-      if (path.length === 0) {
-        path = "/";
+      if (path2.length === 0) {
+        path2 = "/";
       }
-      return path;
+      return path2;
     }
     function buildKey(opts) {
-      const { path, method, body, headers, query } = opts;
+      const { path: path2, method, body, headers, query } = opts;
       return {
-        path,
+        path: path2,
         method,
         body,
         headers,
@@ -13206,10 +13206,10 @@ var require_pending_interceptors_formatter = __commonJS({
       }
       format(pendingInterceptors) {
         const withPrettyHeaders = pendingInterceptors.map(
-          ({ method, path, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
+          ({ method, path: path2, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
             Method: method,
             Origin: origin,
-            Path: path,
+            Path: path2,
             "Status code": statusCode,
             Persistent: persist ? PERSISTENT : NOT_PERSISTENT,
             Invocations: timesInvoked,
@@ -13291,9 +13291,9 @@ var require_mock_agent = __commonJS({
         const acceptNonStandardSearchParameters = this[kMockAgentAcceptsNonStandardSearchParameters];
         const dispatchOpts = { ...opts };
         if (acceptNonStandardSearchParameters && dispatchOpts.path) {
-          const [path, searchParams] = dispatchOpts.path.split("?");
+          const [path2, searchParams] = dispatchOpts.path.split("?");
           const normalizedSearchParams = normalizeSearchParams(searchParams, acceptNonStandardSearchParameters);
-          dispatchOpts.path = `${path}?${normalizedSearchParams}`;
+          dispatchOpts.path = `${path2}?${normalizedSearchParams}`;
         }
         return this[kAgent].dispatch(dispatchOpts, handler);
       }
@@ -13694,12 +13694,12 @@ var require_snapshot_recorder = __commonJS({
        * @return {Promise<void>} - Resolves when snapshots are loaded
        */
       async loadSnapshots(filePath) {
-        const path = filePath || this.#snapshotPath;
-        if (!path) {
+        const path2 = filePath || this.#snapshotPath;
+        if (!path2) {
           throw new InvalidArgumentError("Snapshot path is required");
         }
         try {
-          const data = await readFile(resolve(path), "utf8");
+          const data = await readFile(resolve(path2), "utf8");
           const parsed = JSON.parse(data);
           if (Array.isArray(parsed)) {
             this.#snapshots.clear();
@@ -13713,7 +13713,7 @@ var require_snapshot_recorder = __commonJS({
           if (error.code === "ENOENT") {
             this.#snapshots.clear();
           } else {
-            throw new UndiciError(`Failed to load snapshots from ${path}`, { cause: error });
+            throw new UndiciError(`Failed to load snapshots from ${path2}`, { cause: error });
           }
         }
       }
@@ -13724,11 +13724,11 @@ var require_snapshot_recorder = __commonJS({
        * @returns {Promise<void>} - Resolves when snapshots are saved
        */
       async saveSnapshots(filePath) {
-        const path = filePath || this.#snapshotPath;
-        if (!path) {
+        const path2 = filePath || this.#snapshotPath;
+        if (!path2) {
           throw new InvalidArgumentError("Snapshot path is required");
         }
-        const resolvedPath = resolve(path);
+        const resolvedPath = resolve(path2);
         await mkdir(dirname(resolvedPath), { recursive: true });
         const data = Array.from(this.#snapshots.entries()).map(([hash, snapshot]) => ({
           hash,
@@ -14353,15 +14353,15 @@ var require_redirect_handler = __commonJS({
           return;
         }
         const { origin, pathname, search } = util.parseURL(new URL(this.location, this.opts.origin && new URL(this.opts.path, this.opts.origin)));
-        const path = search ? `${pathname}${search}` : pathname;
-        const redirectUrlString = `${origin}${path}`;
+        const path2 = search ? `${pathname}${search}` : pathname;
+        const redirectUrlString = `${origin}${path2}`;
         for (const historyUrl of this.history) {
           if (historyUrl.toString() === redirectUrlString) {
             throw new InvalidArgumentError(`Redirect loop detected. Cannot redirect to ${origin}. This typically happens when using a Client or Pool with cross-origin redirects. Use an Agent for cross-origin redirects.`);
           }
         }
         this.opts.headers = cleanRequestHeaders(this.opts.headers, statusCode === 303, this.opts.origin !== origin);
-        this.opts.path = path;
+        this.opts.path = path2;
         this.opts.origin = origin;
         this.opts.query = null;
       }
@@ -20561,11 +20561,11 @@ var require_fetch = __commonJS({
       function dispatch({ body }) {
         const url = requestCurrentURL(request);
         const agent = fetchParams.controller.dispatcher;
-        const path = url.pathname + url.search;
+        const path2 = url.pathname + url.search;
         const hasTrailingQuestionMark = url.search.length === 0 && url.href[url.href.length - url.hash.length - 1] === "?";
         return new Promise((resolve, reject) => agent.dispatch(
           {
-            path: hasTrailingQuestionMark ? `${path}?` : path,
+            path: hasTrailingQuestionMark ? `${path2}?` : path2,
             origin: url.origin,
             method: request.method,
             body: agent.isMockActive ? request.body && (request.body.source || request.body.stream) : body,
@@ -21496,9 +21496,9 @@ var require_util4 = __commonJS({
         }
       }
     }
-    function validateCookiePath(path) {
-      for (let i = 0; i < path.length; ++i) {
-        const code = path.charCodeAt(i);
+    function validateCookiePath(path2) {
+      for (let i = 0; i < path2.length; ++i) {
+        const code = path2.charCodeAt(i);
         if (code < 32 || // exclude CTLs (0-31)
         code === 127 || // DEL
         code === 59) {
@@ -24659,11 +24659,11 @@ var require_undici = __commonJS({
           if (typeof opts.path !== "string") {
             throw new InvalidArgumentError("invalid opts.path");
           }
-          let path = opts.path;
+          let path2 = opts.path;
           if (!opts.path.startsWith("/")) {
-            path = `/${path}`;
+            path2 = `/${path2}`;
           }
-          url = new URL(util.parseOrigin(url).origin + path);
+          url = new URL(util.parseOrigin(url).origin + path2);
         } else {
           if (!opts) {
             opts = typeof url === "object" ? url : {};
@@ -24779,16 +24779,41 @@ __export(extension_exports, {
   deactivate: () => deactivate
 });
 module.exports = __toCommonJS(extension_exports);
-var vscode13 = __toESM(require("vscode"));
+var vscode14 = __toESM(require("vscode"));
 
 // src/providers/hoverProvider.ts
-var vscode3 = __toESM(require("vscode"));
+var vscode4 = __toESM(require("vscode"));
 
 // src/services/aiService.ts
-var vscode = __toESM(require("vscode"));
+var vscode2 = __toESM(require("vscode"));
 var import_undici = __toESM(require_undici());
+
+// src/utils/endpoint.ts
+var fs = __toESM(require("fs"));
+var path = __toESM(require("path"));
+var vscode = __toESM(require("vscode"));
+function readEndpointFromFile() {
+  const candidatePaths = [];
+  const folders = vscode.workspace.workspaceFolders || [];
+  for (const folder of folders) {
+    candidatePaths.push(path.join(folder.uri.fsPath, ".ghia-ai-endpoint"));
+  }
+  candidatePaths.push(path.join(__dirname, "..", ".ghia-ai-endpoint"));
+  candidatePaths.push(path.join(__dirname, "..", "..", ".ghia-ai-endpoint"));
+  for (const candidate of candidatePaths) {
+    try {
+      const content = fs.readFileSync(candidate, "utf8");
+      const line = content.split(/\r?\n/).find((l) => l.trim().length > 0);
+      if (line) return line.trim();
+    } catch {
+    }
+  }
+  return null;
+}
+
+// src/services/aiService.ts
 var DEFAULT_MODEL = "codegemma:2b";
-var DEFAULT_ENDPOINT = process.env.GHIA_AI_OLLAMA_ENDPOINT ?? "http://localhost:11434";
+var DEFAULT_ENDPOINT = "http://localhost:11434";
 var AI_REQUEST_TIMEOUT_MS = 3e5;
 function createAbortSignalWithTimeout(token) {
   const controller = new AbortController();
@@ -24810,14 +24835,22 @@ function createAbortSignalWithTimeout(token) {
 var AIService = class {
   fetchImpl = globalThis.fetch ? globalThis.fetch.bind(globalThis) : import_undici.fetch;
   getConfig() {
-    const config = vscode.workspace.getConfiguration("ghiaAI");
+    const config = vscode2.workspace.getConfiguration("ghiaAI");
+    const inspect = config.inspect("ollamaEndpoint");
+    const hasUserEndpoint = Boolean(
+      inspect?.globalValue ?? inspect?.workspaceValue ?? inspect?.workspaceFolderValue
+    );
+    const endpointFromConfig = hasUserEndpoint ? config.get("ollamaEndpoint") : void 0;
+    const envEndpoint = process.env.GHIA_AI_OLLAMA_ENDPOINT;
+    const fileEndpoint = readEndpointFromFile();
+    const resolvedEndpoint = (typeof endpointFromConfig === "string" && endpointFromConfig.trim() ? endpointFromConfig.trim() : void 0) ?? (typeof envEndpoint === "string" && envEndpoint.trim() ? envEndpoint.trim() : void 0) ?? fileEndpoint ?? DEFAULT_ENDPOINT;
     const modelFromConfig = config.get("model");
     const model = typeof modelFromConfig === "string" && modelFromConfig.trim() ? modelFromConfig : DEFAULT_MODEL;
     return {
       model,
       // Default to the local Ollama instance, which is the expected setup for the
       // extension. Users can override via `ghiaAI.ollamaEndpoint` in settings.
-      ollamaEndpoint: config.get("ollamaEndpoint") ?? DEFAULT_ENDPOINT
+      ollamaEndpoint: resolvedEndpoint
     };
   }
   /**
@@ -25644,7 +25677,7 @@ var CodeStructureDetector = class {
 };
 
 // src/utils/contextExtractor.ts
-var vscode2 = __toESM(require("vscode"));
+var vscode3 = __toESM(require("vscode"));
 var MAX_BLOCK_SCAN_LINES = 200;
 var MAX_FORWARD_SCAN_LINES = 2e3;
 var ContextExtractor = class {
@@ -25708,16 +25741,16 @@ var ContextExtractor = class {
   getBlockRange(document, position, classification) {
     const lineCount = document.lineCount;
     if (lineCount === 0) {
-      return new vscode2.Range(0, 0, 0, 0);
+      return new vscode3.Range(0, 0, 0, 0);
     }
     const lineIndex = Math.max(0, Math.min(position.line, lineCount - 1));
-    const pos = new vscode2.Position(lineIndex, 0);
+    const pos = new vscode3.Position(lineIndex, 0);
     if (classification === "simple" || classification === "unknown") {
       return this.getSingleLineRange(document, pos);
     }
     const { start, end } = classification === "structural" ? this.getStructuralBlockLineRange(document, pos) : this.getBlockLineRange(document, pos, classification);
     const endLine = document.lineAt(end);
-    return new vscode2.Range(start, 0, end, endLine.text.length);
+    return new vscode3.Range(start, 0, end, endLine.text.length);
   }
   /**
    * Returns the range for the single line at the given position (full line from start to end).
@@ -25726,11 +25759,11 @@ var ContextExtractor = class {
   getSingleLineRange(document, position) {
     const lineCount = document.lineCount;
     if (lineCount === 0) {
-      return new vscode2.Range(0, 0, 0, 0);
+      return new vscode3.Range(0, 0, 0, 0);
     }
     const lineIndex = Math.max(0, Math.min(position.line, lineCount - 1));
     const line = document.lineAt(lineIndex);
-    return new vscode2.Range(lineIndex, 0, lineIndex, line.text.length);
+    return new vscode3.Range(lineIndex, 0, lineIndex, line.text.length);
   }
   /**
    * Language-aware block range for structural elements (function, class, if, etc.).
@@ -25882,7 +25915,7 @@ var CodeLensHoverProvider = class {
   explanationPanel = null;
   constructor() {
     this.updateDecorationType();
-    this.selectionListener = vscode3.window.onDidChangeTextEditorSelection(
+    this.selectionListener = vscode4.window.onDidChangeTextEditorSelection(
       (e) => {
         if (!this.lastDecoratedRange || e.textEditor !== this.lastDecoratedEditor)
           return;
@@ -25892,18 +25925,18 @@ var CodeLensHoverProvider = class {
         }
       }
     );
-    this.visibleRangesListener = vscode3.window.onDidChangeTextEditorVisibleRanges((e) => {
+    this.visibleRangesListener = vscode4.window.onDidChangeTextEditorVisibleRanges((e) => {
       if (!this.lastDecoratedRange || e.textEditor !== this.lastDecoratedEditor)
         return;
       if (!this.isRangeVisibleIn(e.visibleRanges, this.lastDecoratedRange)) {
         this.clearDecoration();
       }
     });
-    this.configListener = vscode3.workspace.onDidChangeConfiguration((e) => {
+    this.configListener = vscode4.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration("ghiaAI.highlightColor"))
         this.updateDecorationType();
     });
-    this.themeListener = vscode3.window.onDidChangeActiveColorTheme(
+    this.themeListener = vscode4.window.onDidChangeActiveColorTheme(
       () => this.updateDecorationType()
     );
   }
@@ -25926,12 +25959,12 @@ var CodeLensHoverProvider = class {
     return false;
   }
   getHighlightColor() {
-    const custom = vscode3.workspace.getConfiguration("ghiaAI").get("highlightColor");
+    const custom = vscode4.workspace.getConfiguration("ghiaAI").get("highlightColor");
     if (custom && custom.trim().length > 0) return custom.trim();
-    const kind = vscode3.window.activeColorTheme.kind;
-    if (kind === vscode3.ColorThemeKind.HighContrast)
+    const kind = vscode4.window.activeColorTheme.kind;
+    if (kind === vscode4.ColorThemeKind.HighContrast)
       return THEME_HIGHLIGHT.highContrast;
-    if (kind === vscode3.ColorThemeKind.Light) return THEME_HIGHLIGHT.light;
+    if (kind === vscode4.ColorThemeKind.Light) return THEME_HIGHLIGHT.light;
     return THEME_HIGHLIGHT.dark;
   }
   updateDecorationType() {
@@ -25939,7 +25972,7 @@ var CodeLensHoverProvider = class {
       this.decorationType.dispose();
       this.decorationType = null;
     }
-    this.decorationType = vscode3.window.createTextEditorDecorationType({
+    this.decorationType = vscode4.window.createTextEditorDecorationType({
       backgroundColor: this.getHighlightColor()
     });
   }
@@ -25991,7 +26024,7 @@ var CodeLensHoverProvider = class {
     if (isEmptyLine) {
       if (!this.detector.isEmptyLineInBlock(document, position)) return null;
     }
-    const highlightPosition = isEmptyLine ? new vscode3.Position(
+    const highlightPosition = isEmptyLine ? new vscode4.Position(
       this.getPreviousNonBlankLine(document, position.line),
       0
     ) : position;
@@ -26021,7 +26054,7 @@ var CodeLensHoverProvider = class {
     const range = document.lineAt(position.line).range;
     const cached = this.cacheService.get(code);
     if (cached !== null) {
-      const editor2 = vscode3.window.visibleTextEditors.find((e) => e.document === document) ?? (vscode3.window.activeTextEditor?.document === document ? vscode3.window.activeTextEditor : void 0);
+      const editor2 = vscode4.window.visibleTextEditors.find((e) => e.document === document) ?? (vscode4.window.activeTextEditor?.document === document ? vscode4.window.activeTextEditor : void 0);
       if (editor2) {
         const highlightRange2 = this.getHighlightRange(
           document,
@@ -26030,7 +26063,7 @@ var CodeLensHoverProvider = class {
         );
         this.applyDecoration(editor2, highlightRange2);
       }
-      return new vscode3.Hover(
+      return new vscode4.Hover(
         this.createHoverContent(cached, code, context),
         range
       );
@@ -26040,11 +26073,11 @@ var CodeLensHoverProvider = class {
       highlightPosition,
       classification
     );
-    const editor = vscode3.window.visibleTextEditors.find((e) => e.document === document) ?? (vscode3.window.activeTextEditor?.document === document ? vscode3.window.activeTextEditor : void 0);
+    const editor = vscode4.window.visibleTextEditors.find((e) => e.document === document) ?? (vscode4.window.activeTextEditor?.document === document ? vscode4.window.activeTextEditor : void 0);
     if (editor) {
       this.applyDecoration(editor, highlightRange);
     }
-    const cancelSource = new vscode3.CancellationTokenSource();
+    const cancelSource = new vscode4.CancellationTokenSource();
     this.hoverCancelSource = cancelSource;
     _token.onCancellationRequested(() => cancelSource.cancel());
     void this.fetchExplanation(
@@ -26092,7 +26125,7 @@ var CodeLensHoverProvider = class {
     }
   }
   createHoverContent(explanation, code, context) {
-    const md = new vscode3.MarkdownString(void 0, true);
+    const md = new vscode4.MarkdownString(void 0, true);
     md.isTrusted = true;
     md.appendMarkdown("### \u{1F9E0} ghia-ai\n\n");
     md.appendMarkdown(explanation);
@@ -26112,15 +26145,15 @@ var CodeLensHoverProvider = class {
    * User must re-hover to see the result (Flow 4).
    */
   retryExplanation(code, context) {
-    const document = vscode3.window.activeTextEditor?.document;
+    const document = vscode4.window.activeTextEditor?.document;
     if (!document) {
-      void vscode3.window.showWarningMessage(
+      void vscode4.window.showWarningMessage(
         "No active editor. Re-hover over the code to retry."
       );
       return;
     }
     this.cacheService.delete(code);
-    const position = new vscode3.Position(0, 0);
+    const position = new vscode4.Position(0, 0);
     void this.fetchExplanation(document, position, code, context, void 0);
   }
   /**
@@ -26161,7 +26194,7 @@ var CodeLensHoverProvider = class {
     if (firstLine.length === 0) return null;
     for (let i = 0; i < document.lineCount; i++) {
       if (document.lineAt(i).text.trim() === firstLine) {
-        return new vscode3.Position(i, 0);
+        return new vscode4.Position(i, 0);
       }
     }
     return null;
@@ -26174,14 +26207,14 @@ var CodeLensHoverProvider = class {
   async explainCode(code, context) {
     const panel = this.getOrCreatePanel("ghia-ai: Explanation");
     panel.webview.html = getExplanationHtml("Preparing explanation...");
-    const editor = vscode3.window.activeTextEditor;
+    const editor = vscode4.window.activeTextEditor;
     let document = editor?.document;
     let position;
     let resolvedCode;
     let resolvedContext;
     if (code === void 0 || code === "") {
       if (!editor) {
-        vscode3.window.showWarningMessage(
+        vscode4.window.showWarningMessage(
           "No active editor. Select code or hover a line first."
         );
         return;
@@ -26222,7 +26255,7 @@ var CodeLensHoverProvider = class {
           );
           resolvedContext = extracted.context;
         } else {
-          const fallbackPos = new vscode3.Position(0, 0);
+          const fallbackPos = new vscode4.Position(0, 0);
           const extracted = this.contextExtractor.extract(
             document,
             fallbackPos,
@@ -26244,9 +26277,9 @@ var CodeLensHoverProvider = class {
     const fileStructure = document != null ? this.getFileStructureSummary(document) : "";
     let explanation;
     try {
-      explanation = await vscode3.window.withProgress(
+      explanation = await vscode4.window.withProgress(
         {
-          location: vscode3.ProgressLocation.Notification,
+          location: vscode4.ProgressLocation.Notification,
           title: "ghia-ai",
           cancellable: false
         },
@@ -26272,17 +26305,17 @@ var CodeLensHoverProvider = class {
   getOrCreatePanel(title) {
     if (this.explanationPanel) {
       try {
-        this.explanationPanel.reveal(vscode3.ViewColumn.Beside);
+        this.explanationPanel.reveal(vscode4.ViewColumn.Beside);
         this.explanationPanel.title = title;
         return this.explanationPanel;
       } catch {
         this.explanationPanel = null;
       }
     }
-    this.explanationPanel = vscode3.window.createWebviewPanel(
+    this.explanationPanel = vscode4.window.createWebviewPanel(
       "ghiaAiExplain",
       title,
-      vscode3.ViewColumn.Beside,
+      vscode4.ViewColumn.Beside,
       { enableScripts: false }
     );
     this.explanationPanel.onDidDispose(() => {
@@ -26341,7 +26374,7 @@ function escapeHtml(text) {
 }
 
 // src/managers/stateManager.ts
-var vscode4 = __toESM(require("vscode"));
+var vscode5 = __toESM(require("vscode"));
 var STATE_KEY = "ghia-ai.state";
 var DEBOUNCE_MS = 500;
 var DEFAULT_STATE = {
@@ -26354,7 +26387,7 @@ var StateManager = class {
     this._state = this.loadState();
   }
   _state;
-  _onDidChangeEnabled = new vscode4.EventEmitter();
+  _onDidChangeEnabled = new vscode5.EventEmitter();
   onDidChangeEnabled = this._onDidChangeEnabled.event;
   _setEnabledDebounceTimer;
   loadState() {
@@ -26404,16 +26437,17 @@ var StateManager = class {
 };
 
 // src/managers/menuManager.ts
-var vscode5 = __toESM(require("vscode"));
+var vscode6 = __toESM(require("vscode"));
 var CONFIG_NS = "ghiaAI";
 var ACTION_PREFIX = "action:";
 var DEFAULT_MODEL2 = "llama3";
+var DEFAULT_ENDPOINT2 = "http://127.0.0.1:11434";
 var OLLAMA_MODELS = ["llama3", "llama3.2", "codellama", "mistral", "phi3"];
 var MenuManager = class {
   constructor(stateManager2, context) {
     this.stateManager = stateManager2;
     this.context = context;
-    this.configWatcherDisposable = vscode5.workspace.onDidChangeConfiguration(
+    this.configWatcherDisposable = vscode6.workspace.onDidChangeConfiguration(
       (e) => {
         if (e.affectsConfiguration("ghiaAI") && this.quickPick && this.quickPick.visible) {
           this.quickPick.items = this.buildItems();
@@ -26426,13 +26460,21 @@ var MenuManager = class {
   submenuQuickPick;
   configWatcherDisposable;
   getConfig() {
-    const config = vscode5.workspace.getConfiguration(CONFIG_NS);
+    const config = vscode6.workspace.getConfiguration(CONFIG_NS);
     const modelFromConfig = config.get("model");
+    const inspect = config.inspect("ollamaEndpoint");
+    const hasUserEndpoint = Boolean(
+      inspect?.globalValue ?? inspect?.workspaceValue ?? inspect?.workspaceFolderValue
+    );
+    const endpointFromConfig = hasUserEndpoint ? config.get("ollamaEndpoint") : void 0;
+    const fileEndpoint = readEndpointFromFile();
+    const envEndpoint = process.env.GHIA_AI_OLLAMA_ENDPOINT;
     const model = typeof modelFromConfig === "string" && modelFromConfig.trim() ? modelFromConfig : DEFAULT_MODEL2;
+    const resolvedEndpoint = (typeof endpointFromConfig === "string" && endpointFromConfig.trim() ? endpointFromConfig.trim() : void 0) ?? (typeof envEndpoint === "string" && envEndpoint.trim() ? envEndpoint.trim() : void 0) ?? fileEndpoint ?? DEFAULT_ENDPOINT2;
     return {
       model,
       // Default to local Ollama; users can override in settings if remote.
-      ollamaEndpoint: config.get("ollamaEndpoint") ?? "http://127.0.0.1:11434"
+      ollamaEndpoint: resolvedEndpoint
     };
   }
   /**
@@ -26460,7 +26502,7 @@ var MenuManager = class {
     return [
       {
         label: "Control",
-        kind: vscode5.QuickPickItemKind.Separator
+        kind: vscode6.QuickPickItemKind.Separator
       },
       {
         label: toggleLabel,
@@ -26470,7 +26512,7 @@ var MenuManager = class {
       },
       {
         label: "Configuration",
-        kind: vscode5.QuickPickItemKind.Separator
+        kind: vscode6.QuickPickItemKind.Separator
       },
       {
         label: "$(symbol-misc) Change model",
@@ -26493,7 +26535,7 @@ var MenuManager = class {
     if (action === "toggle") {
       await this.stateManager.setEnabled(!this.stateManager.getEnabled());
     } else if (action === "openSettings") {
-      await vscode5.commands.executeCommand(
+      await vscode6.commands.executeCommand(
         "workbench.action.openSettings",
         CONFIG_NS
       );
@@ -26512,7 +26554,7 @@ var MenuManager = class {
       detail: model
     }));
     if (!this.submenuQuickPick) {
-      this.submenuQuickPick = vscode5.window.createQuickPick();
+      this.submenuQuickPick = vscode6.window.createQuickPick();
       this.submenuQuickPick.canSelectMany = false;
       this.submenuQuickPick.onDidHide(() => {
         this.submenuQuickPick.selectedItems = [];
@@ -26528,8 +26570,8 @@ var MenuManager = class {
       const selected = this.submenuQuickPick.selectedItems[0];
       if (!selected?.detail) return;
       const model = selected.detail;
-      const configTarget = vscode5.ConfigurationTarget.Global;
-      void vscode5.workspace.getConfiguration(CONFIG_NS).update("model", model, configTarget);
+      const configTarget = vscode6.ConfigurationTarget.Global;
+      void vscode6.workspace.getConfiguration(CONFIG_NS).update("model", model, configTarget);
       this.submenuQuickPick.hide();
     });
     const hideDisposable = this.submenuQuickPick.onDidHide(() => {
@@ -26545,7 +26587,7 @@ var MenuManager = class {
    */
   showMainMenu() {
     if (!this.quickPick) {
-      this.quickPick = vscode5.window.createQuickPick();
+      this.quickPick = vscode6.window.createQuickPick();
       this.quickPick.title = "ghia-ai";
       this.quickPick.placeholder = "Choose an action (multiple allowed)";
       this.quickPick.matchOnDescription = true;
@@ -26589,7 +26631,7 @@ var MenuManager = class {
 };
 
 // src/managers/statusBarManager.ts
-var vscode6 = __toESM(require("vscode"));
+var vscode7 = __toESM(require("vscode"));
 var STATUS_BAR_PRIORITY = 100;
 var TOOLTIP_ENABLED = "ghia-ai - Click to configure";
 var TOOLTIP_DISABLED = "ghia-ai (disabled) - Click to enable";
@@ -26597,8 +26639,8 @@ var StatusBarManager = class {
   constructor(stateManager2, menuManager2) {
     this.stateManager = stateManager2;
     this.menuManager = menuManager2;
-    this.statusBarItem = vscode6.window.createStatusBarItem(
-      vscode6.StatusBarAlignment.Right,
+    this.statusBarItem = vscode7.window.createStatusBarItem(
+      vscode7.StatusBarAlignment.Right,
       STATUS_BAR_PRIORITY
     );
     this.updateIcon(this.stateManager.getEnabled());
@@ -26615,7 +26657,7 @@ var StatusBarManager = class {
    * Returns a disposable that unregisters the command.
    */
   registerClickHandler(context) {
-    const disposable = vscode6.commands.registerCommand(
+    const disposable = vscode7.commands.registerCommand(
       "ghia-ai.statusBarClick",
       () => {
         this.menuManager.showMainMenu();
@@ -26646,11 +26688,11 @@ var StatusBarManager = class {
 };
 
 // src/managers/prototypeManager.ts
-var vscode10 = __toESM(require("vscode"));
+var vscode11 = __toESM(require("vscode"));
 
 // src/providers/codeLensProvider.ts
-var vscode7 = __toESM(require("vscode"));
-var ExplainCodeLens = class extends vscode7.CodeLens {
+var vscode8 = __toESM(require("vscode"));
+var ExplainCodeLens = class extends vscode8.CodeLens {
   constructor(range, code, context, languageId) {
     super(range);
     this.code = code;
@@ -26662,7 +26704,7 @@ var CodeLensExplainProvider = class {
   aiService = new AIService();
   cacheService = new CacheService();
   contextExtractor = new ContextExtractor();
-  _onDidChangeCodeLenses = new vscode7.EventEmitter();
+  _onDidChangeCodeLenses = new vscode8.EventEmitter();
   onDidChangeCodeLenses = this._onDidChangeCodeLenses.event;
   // Track pending explanations to show loading state
   pendingExplanations = /* @__PURE__ */ new Set();
@@ -26757,19 +26799,19 @@ var CodeLensExplainProvider = class {
    */
   async showExplanation(explanation, code) {
     const codePreview = code.length > 60 ? `${code.substring(0, 57)}...` : code;
-    await vscode7.window.showInformationMessage(
+    await vscode8.window.showInformationMessage(
       explanation,
       { modal: false, detail: `Code: ${codePreview}` },
       "Copy",
       "Open in Panel"
     ).then((selection) => {
       if (selection === "Copy") {
-        vscode7.env.clipboard.writeText(explanation);
-        vscode7.window.showInformationMessage(
+        vscode8.env.clipboard.writeText(explanation);
+        vscode8.window.showInformationMessage(
           "Explanation copied to clipboard"
         );
       } else if (selection === "Open in Panel") {
-        vscode7.commands.executeCommand("ghia-ai.explainCode", code, "");
+        vscode8.commands.executeCommand("ghia-ai.explainCode", code, "");
       }
     });
   }
@@ -26794,8 +26836,8 @@ var CodeLensExplainProvider = class {
     return constructs;
   }
   matchConstruct(text, lineIndex, document) {
-    const position = new vscode7.Position(lineIndex, 0);
-    const range = new vscode7.Range(lineIndex, 0, lineIndex, text.length);
+    const position = new vscode8.Position(lineIndex, 0);
+    const range = new vscode8.Range(lineIndex, 0, lineIndex, text.length);
     for (const [patternName, pattern] of Object.entries(this.patterns)) {
       const match = text.match(pattern);
       if (match) {
@@ -26866,17 +26908,17 @@ var CodeLensExplainProvider = class {
   getOrCreatePanel(title) {
     if (this.explanationPanel) {
       try {
-        this.explanationPanel.reveal(vscode7.ViewColumn.Beside);
+        this.explanationPanel.reveal(vscode8.ViewColumn.Beside);
         this.explanationPanel.title = title;
         return this.explanationPanel;
       } catch {
         this.explanationPanel = null;
       }
     }
-    this.explanationPanel = vscode7.window.createWebviewPanel(
+    this.explanationPanel = vscode8.window.createWebviewPanel(
       "ghiaAiExplain",
       title,
-      vscode7.ViewColumn.Beside,
+      vscode8.ViewColumn.Beside,
       { enableScripts: false }
     );
     this.explanationPanel.onDidDispose(() => {
@@ -26906,11 +26948,11 @@ var CodeLensExplainProvider = class {
 };
 
 // src/providers/peekViewProvider.ts
-var vscode8 = __toESM(require("vscode"));
+var vscode9 = __toESM(require("vscode"));
 var EXPLAIN_SCHEME = "ghia-explain";
 var explanationStore = /* @__PURE__ */ new Map();
 var ExplanationDocumentProvider = class {
-  _onDidChange = new vscode8.EventEmitter();
+  _onDidChange = new vscode9.EventEmitter();
   onDidChange = this._onDidChange.event;
   provideTextDocumentContent(uri) {
     const id = uri.path;
@@ -26960,7 +27002,7 @@ var PeekExplanationProvider = class {
   disposables = [];
   constructor() {
     this.documentProvider = new ExplanationDocumentProvider();
-    const registration = vscode8.workspace.registerTextDocumentContentProvider(
+    const registration = vscode9.workspace.registerTextDocumentContentProvider(
       EXPLAIN_SCHEME,
       this.documentProvider
     );
@@ -26971,28 +27013,28 @@ var PeekExplanationProvider = class {
    * Call this via a command to avoid intercepting Go to Definition.
    */
   async showPeekExplanation() {
-    const editor = vscode8.window.activeTextEditor;
+    const editor = vscode9.window.activeTextEditor;
     if (!editor) {
-      vscode8.window.showWarningMessage("No active editor");
+      vscode9.window.showWarningMessage("No active editor");
       return;
     }
     const document = editor.document;
     const position = editor.selection.active;
     const lineText = document.lineAt(position.line).text;
     if (lineText.trim().length === 0) {
-      vscode8.window.showInformationMessage("Place cursor on a line with code");
+      vscode9.window.showInformationMessage("Place cursor on a line with code");
       return;
     }
     const { code, context } = this.contextExtractor.extract(document, position);
     if (code.length === 0) {
-      vscode8.window.showInformationMessage("No code found at cursor position");
+      vscode9.window.showInformationMessage("No code found at cursor position");
       return;
     }
     let explanation = this.cacheService.get(code);
     if (!explanation) {
-      explanation = await vscode8.window.withProgress(
+      explanation = await vscode9.window.withProgress(
         {
-          location: vscode8.ProgressLocation.Notification,
+          location: vscode9.ProgressLocation.Notification,
           title: "ghia-ai: Generating explanation...",
           cancellable: true
         },
@@ -27015,13 +27057,13 @@ var PeekExplanationProvider = class {
       languageId: document.languageId,
       timestamp: Date.now()
     });
-    const uri = vscode8.Uri.parse(`${EXPLAIN_SCHEME}:${id}`);
+    const uri = vscode9.Uri.parse(`${EXPLAIN_SCHEME}:${id}`);
     this.documentProvider.update(uri);
-    await vscode8.commands.executeCommand(
+    await vscode9.commands.executeCommand(
       "editor.action.peekLocations",
       editor.document.uri,
       position,
-      [new vscode8.Location(uri, new vscode8.Position(0, 0))],
+      [new vscode9.Location(uri, new vscode9.Position(0, 0))],
       "peek"
     );
   }
@@ -27046,22 +27088,22 @@ var QuickPeekProvider = class {
    * Shows a quick peek explanation for the current cursor position.
    */
   async showQuickPeek() {
-    const editor = vscode8.window.activeTextEditor;
+    const editor = vscode9.window.activeTextEditor;
     if (!editor) {
-      vscode8.window.showWarningMessage("No active editor");
+      vscode9.window.showWarningMessage("No active editor");
       return;
     }
     const document = editor.document;
     const position = editor.selection.active;
     const lineText = document.lineAt(position.line).text;
     if (lineText.trim().length === 0) {
-      vscode8.window.showInformationMessage("Place cursor on a line with code");
+      vscode9.window.showInformationMessage("Place cursor on a line with code");
       return;
     }
     const { code, context } = this.contextExtractor.extract(document, position);
     let explanation = this.cacheService.get(code);
     if (!explanation) {
-      const loadingPick = vscode8.window.createQuickPick();
+      const loadingPick = vscode9.window.createQuickPick();
       loadingPick.title = "\u{1F9E0} ghia-ai";
       loadingPick.placeholder = "Generating explanation...";
       loadingPick.busy = true;
@@ -27095,15 +27137,15 @@ var QuickPeekProvider = class {
         description: "View in side panel with full formatting"
       }
     ];
-    const selection = await vscode8.window.showQuickPick(items, {
+    const selection = await vscode9.window.showQuickPick(items, {
       title: "\u{1F9E0} ghia-ai Quick Peek",
       placeHolder: explanation
     });
     if (selection?.label.includes("Copy")) {
-      await vscode8.env.clipboard.writeText(explanation);
-      vscode8.window.showInformationMessage("Copied to clipboard");
+      await vscode9.env.clipboard.writeText(explanation);
+      vscode9.window.showInformationMessage("Copied to clipboard");
     } else if (selection?.label.includes("Panel")) {
-      vscode8.commands.executeCommand("ghia-ai.explainCode", code, context);
+      vscode9.commands.executeCommand("ghia-ai.explainCode", code, context);
     }
   }
   dispose() {
@@ -27119,7 +27161,7 @@ var InlinePeekProvider = class {
   disposables = [];
   constructor() {
     this.disposables.push(
-      vscode8.window.onDidChangeTextEditorSelection((e) => {
+      vscode9.window.onDidChangeTextEditorSelection((e) => {
         if (e.textEditor === this.currentEditor) {
           this.dismissPeek();
         }
@@ -27130,7 +27172,7 @@ var InlinePeekProvider = class {
    * Shows an inline peek for the code at the current cursor position.
    */
   async showInlinePeek() {
-    const editor = vscode8.window.activeTextEditor;
+    const editor = vscode9.window.activeTextEditor;
     if (!editor) return;
     this.dismissPeek();
     this.currentEditor = editor;
@@ -27165,17 +27207,17 @@ var InlinePeekProvider = class {
    */
   showPeekDecoration(editor, line, content) {
     this.dismissPeek();
-    this.peekZoneDecoration = vscode8.window.createTextEditorDecorationType({
+    this.peekZoneDecoration = vscode9.window.createTextEditorDecorationType({
       after: {
         contentText: ` \u{1F4A1} ${content}`,
-        color: new vscode8.ThemeColor("editorCodeLens.foreground"),
+        color: new vscode9.ThemeColor("editorCodeLens.foreground"),
         fontStyle: "italic",
         margin: "0 0 0 2em"
       },
       isWholeLine: true,
-      backgroundColor: new vscode8.ThemeColor("editor.hoverHighlightBackground")
+      backgroundColor: new vscode9.ThemeColor("editor.hoverHighlightBackground")
     });
-    const range = new vscode8.Range(line, 0, line, 0);
+    const range = new vscode9.Range(line, 0, line, 0);
     editor.setDecorations(this.peekZoneDecoration, [range]);
   }
   dismissPeek() {
@@ -27192,7 +27234,7 @@ var InlinePeekProvider = class {
 };
 
 // src/providers/sidePanelProvider.ts
-var vscode9 = __toESM(require("vscode"));
+var vscode10 = __toESM(require("vscode"));
 var SidePanelProvider = class {
   constructor(extensionUri) {
     this.extensionUri = extensionUri;
@@ -27215,7 +27257,7 @@ var SidePanelProvider = class {
       enableScripts: true,
       localResourceRoots: [this.extensionUri]
     };
-    const config = vscode9.workspace.getConfiguration("ghiaAI");
+    const config = vscode10.workspace.getConfiguration("ghiaAI");
     this.pythonFocus = config.get("askPythonMode", true);
     webviewView.webview.html = this.getHtml();
     webviewView.webview.onDidReceiveMessage(
@@ -27223,10 +27265,10 @@ var SidePanelProvider = class {
         switch (message.command) {
           case "copy":
             if (this.currentExplanation) {
-              await vscode9.env.clipboard.writeText(
+              await vscode10.env.clipboard.writeText(
                 this.currentExplanation.explanation
               );
-              vscode9.window.showInformationMessage("Copied to clipboard");
+              vscode10.window.showInformationMessage("Copied to clipboard");
             }
             break;
           case "refresh":
@@ -27259,15 +27301,15 @@ var SidePanelProvider = class {
     );
     this.updateView();
     this.disposables.push(
-      vscode9.window.onDidChangeActiveTextEditor(() => this.updateView()),
-      vscode9.window.onDidChangeTextEditorSelection(() => this.updateView())
+      vscode10.window.onDidChangeActiveTextEditor(() => this.updateView()),
+      vscode10.window.onDidChangeTextEditorSelection(() => this.updateView())
     );
   }
   /**
    * Explains the currently selected or cursor-adjacent code.
    */
   async explainCurrentSelection() {
-    const editor = vscode9.window.activeTextEditor;
+    const editor = vscode10.window.activeTextEditor;
     if (!editor) {
       this.showMessage("No active editor. Open a file first.");
       return;
@@ -27395,7 +27437,7 @@ var SidePanelProvider = class {
   async handleAsk(question, options) {
     const trimmed = question?.trim();
     if (!trimmed) return;
-    const editor = vscode9.window.activeTextEditor;
+    const editor = vscode10.window.activeTextEditor;
     const MAX_CHARS = 3e4;
     let contextInfo;
     if (editor) {
@@ -27510,7 +27552,7 @@ var SidePanelProvider = class {
     }
   }
   getContextHints() {
-    const editor = vscode9.window.activeTextEditor;
+    const editor = vscode10.window.activeTextEditor;
     if (!editor) {
       return {
         hasSelection: false,
@@ -27984,7 +28026,7 @@ var SidePanelProvider = class {
    */
   async toggleScope() {
     this.pythonFocus = !this.pythonFocus;
-    await vscode9.workspace.getConfiguration("ghiaAI").update("askPythonMode", this.pythonFocus, vscode9.ConfigurationTarget.Global);
+    await vscode10.workspace.getConfiguration("ghiaAI").update("askPythonMode", this.pythonFocus, vscode10.ConfigurationTarget.Global);
     this.updateView();
   }
   dispose() {
@@ -28008,7 +28050,7 @@ var FloatingPanelProvider = class {
    * Useful for pre-opening the space before asking a question.
    */
   openPanel() {
-    const config = vscode9.workspace.getConfiguration("ghiaAI");
+    const config = vscode10.workspace.getConfiguration("ghiaAI");
     this.pythonFocus = config.get("askPythonMode", true);
     this.ensurePanel();
     this.panel.webview.html = this.getWelcomeHtml();
@@ -28018,9 +28060,9 @@ var FloatingPanelProvider = class {
    * Shows explanation in a floating webview panel beside the editor.
    */
   async showExplanation(code, context) {
-    const editor = vscode9.window.activeTextEditor;
+    const editor = vscode10.window.activeTextEditor;
     if (!editor && !code) {
-      vscode9.window.showWarningMessage("No code to explain");
+      vscode10.window.showWarningMessage("No code to explain");
       return;
     }
     if (!code) {
@@ -28039,11 +28081,11 @@ var FloatingPanelProvider = class {
       }
     }
     if (!code || code.length === 0) {
-      vscode9.window.showWarningMessage("No code selected");
+      vscode10.window.showWarningMessage("No code selected");
       return;
     }
     this.ensurePanel();
-    this.panel.reveal(vscode9.ViewColumn.Beside);
+    this.panel.reveal(vscode10.ViewColumn.Beside);
     this.evenEditorWidths();
     this.panel.webview.html = this.getLoadingHtml(code);
     const languageId = editor?.document.languageId ?? "plaintext";
@@ -28064,13 +28106,13 @@ var FloatingPanelProvider = class {
   }
   ensurePanel() {
     if (this.panel) {
-      this.panel.reveal(vscode9.ViewColumn.Beside);
+      this.panel.reveal(vscode10.ViewColumn.Beside);
       return;
     }
-    this.panel = vscode9.window.createWebviewPanel(
+    this.panel = vscode10.window.createWebviewPanel(
       "ghia-ai.floatingPanel",
       "\u{1F9E0} ghia-ai",
-      vscode9.ViewColumn.Beside,
+      vscode10.ViewColumn.Beside,
       {
         enableScripts: true,
         retainContextWhenHidden: true
@@ -28086,8 +28128,8 @@ var FloatingPanelProvider = class {
     this.panel.webview.onDidReceiveMessage(
       async (message) => {
         if (message.command === "copy" && message.text) {
-          await vscode9.env.clipboard.writeText(message.text);
-          vscode9.window.showInformationMessage("Copied to clipboard");
+          await vscode10.env.clipboard.writeText(message.text);
+          vscode10.window.showInformationMessage("Copied to clipboard");
         } else if (message.command === "ask" && typeof message.text === "string") {
           await this.handleAsk(message.text, {
             includeSelection: Boolean(message.includeSelection),
@@ -28105,7 +28147,7 @@ var FloatingPanelProvider = class {
     );
   }
   evenEditorWidths() {
-    void vscode9.commands.executeCommand("workbench.action.evenEditorWidths");
+    void vscode10.commands.executeCommand("workbench.action.evenEditorWidths");
   }
   getWelcomeHtml() {
     return `<!DOCTYPE html>
@@ -28245,10 +28287,10 @@ var FloatingPanelProvider = class {
   }
   async handleAsk(question, opts) {
     if (!question || !question.trim()) {
-      vscode9.window.showWarningMessage("Enter a question to ask ghia-ai.");
+      vscode10.window.showWarningMessage("Enter a question to ask ghia-ai.");
       return;
     }
-    const editor = vscode9.window.activeTextEditor;
+    const editor = vscode10.window.activeTextEditor;
     const doc = editor?.document;
     const selectionText = opts.includeSelection && editor && !editor.selection.isEmpty ? editor.document.getText(editor.selection).trim() : "";
     const includeFile = opts.includeFile && doc;
@@ -28495,7 +28537,7 @@ ${lines.join("\n")}
    */
   async toggleScope() {
     this.pythonFocus = !this.pythonFocus;
-    await vscode9.workspace.getConfiguration("ghiaAI").update("askPythonMode", this.pythonFocus, vscode9.ConfigurationTarget.Global);
+    await vscode10.workspace.getConfiguration("ghiaAI").update("askPythonMode", this.pythonFocus, vscode10.ConfigurationTarget.Global);
     if (this.panel) {
       this.panel.webview.html = this.renderChatHtml();
     }
@@ -28510,13 +28552,13 @@ ${lines.join("\n")}
 var PrototypeManager = class {
   constructor(context) {
     this.context = context;
-    void vscode10.commands.executeCommand(
+    void vscode11.commands.executeCommand(
       "setContext",
       "ghiaAI.prototype.sidePanelEnabled",
       true
     );
-    this.statusBarItem = vscode10.window.createStatusBarItem(
-      vscode10.StatusBarAlignment.Right,
+    this.statusBarItem = vscode11.window.createStatusBarItem(
+      vscode11.StatusBarAlignment.Right,
       99
     );
     this.statusBarItem.command = "ghia-ai.prototype.selectMode";
@@ -28525,7 +28567,7 @@ var PrototypeManager = class {
     this.registerCommands();
     this.loadConfiguration();
     this.disposables.push(
-      vscode10.workspace.onDidChangeConfiguration((e) => {
+      vscode11.workspace.onDidChangeConfiguration((e) => {
         if (e.affectsConfiguration("ghiaAI.prototype")) {
           this.loadConfiguration();
         }
@@ -28558,7 +28600,7 @@ var PrototypeManager = class {
     this.floatingPanelProvider = new FloatingPanelProvider(
       this.context.extensionUri
     );
-    const sidePanelRegistration = vscode10.window.registerWebviewViewProvider(
+    const sidePanelRegistration = vscode11.window.registerWebviewViewProvider(
       SidePanelProvider.viewType,
       this.sidePanelProvider
     );
@@ -28578,54 +28620,54 @@ var PrototypeManager = class {
   registerCommands() {
     const commands8 = [
       // Mode selection
-      vscode10.commands.registerCommand(
+      vscode11.commands.registerCommand(
         "ghia-ai.prototype.selectMode",
         () => this.showModeSelector()
       ),
-      vscode10.commands.registerCommand(
+      vscode11.commands.registerCommand(
         "ghia-ai.prototype.setMode",
         (mode) => this.setMode(mode)
       ),
       // CodeLens commands
-      vscode10.commands.registerCommand(
+      vscode11.commands.registerCommand(
         "ghia-ai.explainCodeLens",
         (code, context, languageId) => this.codeLensProvider?.handleExplainClick(code, context, languageId)
       ),
-      vscode10.commands.registerCommand(
+      vscode11.commands.registerCommand(
         "ghia-ai.showExplanation",
         (explanation, code) => this.codeLensProvider?.showExplanation(explanation, code)
       ),
       // Peek explanation command (opens in VS Code peek view)
-      vscode10.commands.registerCommand(
+      vscode11.commands.registerCommand(
         "ghia-ai.peekExplanation",
         () => this.peekProvider?.showPeekExplanation()
       ),
       // Quick peek command
-      vscode10.commands.registerCommand(
+      vscode11.commands.registerCommand(
         "ghia-ai.quickPeek",
         () => this.quickPeekProvider?.showQuickPeek()
       ),
       // Inline peek command
-      vscode10.commands.registerCommand(
+      vscode11.commands.registerCommand(
         "ghia-ai.inlinePeek",
         () => this.inlinePeekProvider?.showInlinePeek()
       ),
       // Side panel command
-      vscode10.commands.registerCommand(
+      vscode11.commands.registerCommand(
         "ghia-ai.explainInPanel",
         () => this.sidePanelProvider?.explainCurrentSelection()
       ),
       // Floating panel command
-      vscode10.commands.registerCommand(
+      vscode11.commands.registerCommand(
         "ghia-ai.explainFloating",
         (code, context) => this.floatingPanelProvider?.showExplanation(code, context)
       ),
-      vscode10.commands.registerCommand(
+      vscode11.commands.registerCommand(
         "ghia-ai.openWidePanel",
         () => this.floatingPanelProvider?.openPanel()
       ),
       // Toggle commands
-      vscode10.commands.registerCommand(
+      vscode11.commands.registerCommand(
         "ghia-ai.prototype.toggleCodeLens",
         () => this.toggleCodeLens()
       )
@@ -28637,7 +28679,7 @@ var PrototypeManager = class {
    * Only reads config - does not write back to avoid recursive change events.
    */
   loadConfiguration() {
-    const config = vscode10.workspace.getConfiguration("ghiaAI.prototype");
+    const config = vscode11.workspace.getConfiguration("ghiaAI.prototype");
     const mode = config.get("mode", "hover");
     this.applyMode(mode);
   }
@@ -28703,13 +28745,13 @@ var PrototypeManager = class {
         picked: this.currentMode === "hybrid"
       }
     ];
-    const selection = await vscode10.window.showQuickPick(items, {
+    const selection = await vscode11.window.showQuickPick(items, {
       title: "\u{1F9E0} ghia-ai - Select UI Mode",
       placeHolder: `Current mode: ${this.currentMode}`
     });
     if (selection) {
       await this.setMode(selection.mode);
-      vscode10.window.showInformationMessage(
+      vscode11.window.showInformationMessage(
         `ghia-ai mode set to: ${selection.label.replace(/\$\([^)]+\)\s*/, "")}`
       );
     }
@@ -28719,11 +28761,11 @@ var PrototypeManager = class {
    * Call this for user-initiated mode changes only.
    */
   async setMode(mode) {
-    const config = vscode10.workspace.getConfiguration("ghiaAI.prototype");
+    const config = vscode11.workspace.getConfiguration("ghiaAI.prototype");
     const storedMode = config.get("mode");
     this.applyMode(mode);
     if (storedMode !== mode) {
-      await config.update("mode", mode, vscode10.ConfigurationTarget.Global);
+      await config.update("mode", mode, vscode11.ConfigurationTarget.Global);
     }
   }
   /**
@@ -28753,7 +28795,7 @@ var PrototypeManager = class {
         break;
       case "sidepanel":
         this.updateStatusBar("$(layout-sidebar-right)", "Side Panel Mode");
-        vscode10.commands.executeCommand("ghia-ai.explanationPanel.focus");
+        vscode11.commands.executeCommand("ghia-ai.explanationPanel.focus");
         break;
       case "floatingpanel":
         this.updateStatusBar("$(window)", "Floating Panel Mode");
@@ -28769,7 +28811,7 @@ var PrototypeManager = class {
    */
   enableCodeLensMode() {
     if (!this.codeLensProvider) return;
-    this.codeLensRegistration = vscode10.languages.registerCodeLensProvider(
+    this.codeLensRegistration = vscode11.languages.registerCodeLensProvider(
       [{ scheme: "file" }, { scheme: "untitled" }],
       this.codeLensProvider
     );
@@ -28788,10 +28830,10 @@ var PrototypeManager = class {
     if (this.codeLensRegistration) {
       this.codeLensRegistration.dispose();
       this.codeLensRegistration = null;
-      vscode10.window.showInformationMessage("ghia-ai explanations disabled");
+      vscode11.window.showInformationMessage("ghia-ai explanations disabled");
     } else {
       this.enableCodeLensMode();
-      vscode10.window.showInformationMessage("ghia-ai explanations enabled");
+      vscode11.window.showInformationMessage("ghia-ai explanations enabled");
     }
   }
   /**
@@ -28837,7 +28879,7 @@ Click to change mode`;
         await this.sidePanelProvider?.explainCurrentSelection();
         break;
       default:
-        vscode10.window.showInformationMessage(
+        vscode11.window.showInformationMessage(
           `In ${this.currentMode} mode, hover over code or use the CodeLens links.`
         );
     }
@@ -28849,10 +28891,10 @@ Click to change mode`;
 };
 
 // src/experimental/experimentExtension.ts
-var vscode12 = __toESM(require("vscode"));
+var vscode13 = __toESM(require("vscode"));
 
 // src/experimental/experimentalHoverProviders.ts
-var vscode11 = __toESM(require("vscode"));
+var vscode12 = __toESM(require("vscode"));
 var NullReturningHoverProvider = class {
   provideHover(document, position, _token) {
     console.log(
@@ -28872,12 +28914,12 @@ var AlwaysReturnHoverProvider = class {
     );
     const lineText = document.lineAt(position.line).text;
     if (lineText.trim().length > 0) {
-      const md = new vscode11.MarkdownString();
+      const md = new vscode12.MarkdownString();
       md.appendMarkdown("**\u{1F9EA} Experiment 2: Custom Hover**\n\n");
       md.appendMarkdown(
         `Line ${position.line + 1}, Column ${position.character + 1}`
       );
-      return new vscode11.Hover(md);
+      return new vscode12.Hover(md);
     }
     return null;
   }
@@ -28892,10 +28934,10 @@ var ConditionalHoverProvider = class {
     );
     const trimmedLine = lineText.trim();
     if (trimmedLine.startsWith("function ") || trimmedLine.startsWith("const ") || trimmedLine.startsWith("class ") || trimmedLine.startsWith("export ")) {
-      const md = new vscode11.MarkdownString();
+      const md = new vscode12.MarkdownString();
       md.appendMarkdown("**\u{1F9EA} Experiment 3: Conditional Match**\n\n");
       md.appendMarkdown(`Matched pattern on line ${position.line + 1}`);
-      return new vscode11.Hover(md);
+      return new vscode12.Hover(md);
     }
     return null;
   }
@@ -28909,10 +28951,10 @@ var FirstHoverProvider = class {
     );
     const lineText = document.lineAt(position.line).text;
     if (lineText.trim().length > 0) {
-      const md = new vscode11.MarkdownString();
+      const md = new vscode12.MarkdownString();
       md.appendMarkdown("**\u{1F947} First Provider**\n\n");
       md.appendMarkdown("Registered first in the chain.");
-      return new vscode11.Hover(md);
+      return new vscode12.Hover(md);
     }
     return null;
   }
@@ -28926,10 +28968,10 @@ var SecondHoverProvider = class {
     );
     const lineText = document.lineAt(position.line).text;
     if (lineText.trim().length > 0) {
-      const md = new vscode11.MarkdownString();
+      const md = new vscode12.MarkdownString();
       md.appendMarkdown("**\u{1F948} Second Provider**\n\n");
       md.appendMarkdown("Registered second in the chain.");
-      return new vscode11.Hover(md);
+      return new vscode12.Hover(md);
     }
     return null;
   }
@@ -28943,10 +28985,10 @@ var ThirdHoverProvider = class {
     );
     const lineText = document.lineAt(position.line).text;
     if (lineText.includes("import") || lineText.includes("export")) {
-      const md = new vscode11.MarkdownString();
+      const md = new vscode12.MarkdownString();
       md.appendMarkdown("**\u{1F949} Third Provider (Conditional)**\n\n");
       md.appendMarkdown("Only shows for import/export statements.");
-      return new vscode11.Hover(md);
+      return new vscode12.Hover(md);
     }
     return null;
   }
@@ -28960,10 +29002,10 @@ var HighPriorityHoverProvider = class {
     );
     const lineText = document.lineAt(position.line).text;
     if (lineText.trim().length > 0) {
-      const md = new vscode11.MarkdownString();
+      const md = new vscode12.MarkdownString();
       md.appendMarkdown("**\u26A1 High Priority Provider**\n\n");
       md.appendMarkdown("Registered with high priority intent.");
-      return new vscode11.Hover(md);
+      return new vscode12.Hover(md);
     }
     return null;
   }
@@ -28988,10 +29030,10 @@ var AsyncHoverProvider = class {
       console.log("[Experiment 6] Cancelled during async wait");
       return null;
     }
-    const md = new vscode11.MarkdownString();
+    const md = new vscode12.MarkdownString();
     md.appendMarkdown("**\u23F1\uFE0F Async Provider**\n\n");
     md.appendMarkdown("This provider waited 500ms before responding.");
-    return new vscode11.Hover(md);
+    return new vscode12.Hover(md);
   }
 };
 var UndefinedReturningHoverProvider = class {
@@ -29013,7 +29055,7 @@ var EmptyContentHoverProvider = class {
     );
     const lineText = document.lineAt(position.line).text;
     if (lineText.trim().length > 0) {
-      return new vscode11.Hover(new vscode11.MarkdownString(""));
+      return new vscode12.Hover(new vscode12.MarkdownString(""));
     }
     return null;
   }
@@ -29087,7 +29129,7 @@ function runExperiment(mode) {
   clearExperiments();
   const providers = getExperimentalProviders(mode);
   providers.forEach((provider, index) => {
-    const disposable = vscode12.languages.registerHoverProvider(
+    const disposable = vscode13.languages.registerHoverProvider(
       HOVER_SELECTOR,
       provider
     );
@@ -29098,7 +29140,7 @@ function runExperiment(mode) {
   });
   currentMode = mode;
   updateStatusBar();
-  vscode12.window.showInformationMessage(
+  vscode13.window.showInformationMessage(
     `\u{1F9EA} Experiment "${mode}" active with ${providers.length} provider(s). Check console for logs.`
   );
 }
@@ -29108,7 +29150,7 @@ function updateStatusBar() {
     statusBarItem.text = `$(beaker) Exp: ${currentMode}`;
     statusBarItem.tooltip = `Hover Experiment Mode: ${currentMode}
 Click to change or stop`;
-    statusBarItem.backgroundColor = new vscode12.ThemeColor(
+    statusBarItem.backgroundColor = new vscode13.ThemeColor(
       "statusBarItem.warningBackground"
     );
   } else {
@@ -29124,7 +29166,7 @@ async function showExperimentMenu() {
       description: "Clear all experimental providers",
       detail: "Removes all experimental hover providers, allowing only VS Code defaults"
     },
-    { kind: vscode12.QuickPickItemKind.Separator, label: "Experiments" },
+    { kind: vscode13.QuickPickItemKind.Separator, label: "Experiments" },
     {
       label: "1. Null Returning",
       description: "Test: Does returning null allow VS Code defaults?",
@@ -29176,14 +29218,14 @@ async function showExperimentMenu() {
       detail: "Returns Hover with empty MarkdownString"
     }
   ];
-  const selection = await vscode12.window.showQuickPick(items, {
+  const selection = await vscode13.window.showQuickPick(items, {
     placeHolder: "Select an experiment to run",
     title: "\u{1F9EA} Hover Provider Experiments"
   });
   if (!selection) return;
   if (selection.label.includes("Stop Experiment")) {
     clearExperiments();
-    vscode12.window.showInformationMessage(
+    vscode13.window.showInformationMessage(
       "\u{1F9EA} Experiment stopped. Only VS Code defaults active."
     );
     return;
@@ -29212,13 +29254,13 @@ function logExperimentStatus() {
   console.log(`Mode: ${currentMode ?? "None"}`);
   console.log(`Active providers: ${experimentDisposables.length}`);
   console.log("===============================");
-  vscode12.window.showInformationMessage(
+  vscode13.window.showInformationMessage(
     `Current experiment: ${currentMode ?? "None"} (${experimentDisposables.length} providers)`
   );
 }
 function activateExperiments(context) {
-  statusBarItem = vscode12.window.createStatusBarItem(
-    vscode12.StatusBarAlignment.Left,
+  statusBarItem = vscode13.window.createStatusBarItem(
+    vscode13.StatusBarAlignment.Left,
     100
   );
   statusBarItem.command = "ghia-ai.experiment.menu";
@@ -29256,7 +29298,7 @@ function activate(context) {
   statusBarManager = sbm;
   context.subscriptions.push(sm, mm, sbm, hoverProvider);
   function registerHover() {
-    return vscode13.languages.registerHoverProvider(
+    return vscode14.languages.registerHoverProvider(
       HOVER_SELECTOR2,
       hoverProvider
     );
@@ -29281,7 +29323,7 @@ function activate(context) {
   context.subscriptions.push(stateChangeSubscription);
   sbm.registerClickHandler(context);
   sbm.show();
-  const commandDisposable = vscode13.commands.registerCommand(
+  const commandDisposable = vscode14.commands.registerCommand(
     "ghia-ai.explainCode",
     (codeOrArgs, ctx) => {
       let code;
@@ -29297,17 +29339,17 @@ function activate(context) {
     }
   );
   context.subscriptions.push(commandDisposable);
-  const retryHoverCommandDisposable = vscode13.commands.registerCommand(
+  const retryHoverCommandDisposable = vscode14.commands.registerCommand(
     "ghia-ai.retryHoverExplanation",
     (code, context2) => {
       hoverProvider.retryExplanation(code ?? "", context2 ?? "");
     }
   );
   context.subscriptions.push(retryHoverCommandDisposable);
-  const welcomeSubscription = vscode13.workspace.onDidOpenTextDocument(() => {
+  const welcomeSubscription = vscode14.workspace.onDidOpenTextDocument(() => {
     if (sm.hasShownWelcome()) return;
     const message = "\u{1F44B} Welcome to ghia-ai! Click the icon in the status bar to configure your local Ollama model and get started.";
-    void vscode13.window.showInformationMessage(message, "Configure Now").then((selection) => {
+    void vscode14.window.showInformationMessage(message, "Configure Now").then((selection) => {
       void sm.markWelcomeShown();
       if (selection === "Configure Now") {
         mm.showMainMenu();
@@ -29315,16 +29357,16 @@ function activate(context) {
     });
   });
   context.subscriptions.push(welcomeSubscription);
-  const askCommand = vscode13.commands.registerCommand(
+  const askCommand = vscode14.commands.registerCommand(
     "ghia-ai.askAI",
     async () => {
-      const question = await vscode13.window.showInputBox({
+      const question = await vscode14.window.showInputBox({
         prompt: "Ask your local model a question",
         placeHolder: "Explain random.sample() with examples"
       });
       if (!question) return;
       const includeFile = /\b(current file|this file|in this file|here)\b/i.test(question);
-      const editor = vscode13.window.activeTextEditor;
+      const editor = vscode14.window.activeTextEditor;
       const doc = editor?.document;
       const MAX_CHARS = 3e4;
       let contextInfo;
@@ -29339,9 +29381,9 @@ function activate(context) {
         };
       }
       try {
-        const answer = await vscode13.window.withProgress(
+        const answer = await vscode14.window.withProgress(
           {
-            location: vscode13.ProgressLocation.Notification,
+            location: vscode14.ProgressLocation.Notification,
             title: "ghia-ai",
             cancellable: false
           },
@@ -29350,13 +29392,13 @@ function activate(context) {
         showAnswerPanel(answer, `ghia-ai: ${question}`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        void vscode13.window.showErrorMessage(`ghia-ai: ${msg}`);
+        void vscode14.window.showErrorMessage(`ghia-ai: ${msg}`);
       }
     }
   );
   context.subscriptions.push(askCommand);
-  askStatusBar = vscode13.window.createStatusBarItem(
-    vscode13.StatusBarAlignment.Right,
+  askStatusBar = vscode14.window.createStatusBarItem(
+    vscode14.StatusBarAlignment.Right,
     90
   );
   askStatusBar.text = "$(comment-discussion) Ask AI";
@@ -29364,8 +29406,8 @@ function activate(context) {
   askStatusBar.command = "ghia-ai.askAI";
   askStatusBar.show();
   context.subscriptions.push(askStatusBar);
-  panelStatusBar = vscode13.window.createStatusBarItem(
-    vscode13.StatusBarAlignment.Right,
+  panelStatusBar = vscode14.window.createStatusBarItem(
+    vscode14.StatusBarAlignment.Right,
     88
   );
   panelStatusBar.text = "$(layout-sidebar-right) ghia-ai";
@@ -29373,41 +29415,41 @@ function activate(context) {
   panelStatusBar.command = "ghia-ai.openPanel";
   panelStatusBar.show();
   context.subscriptions.push(panelStatusBar);
-  const config = vscode13.workspace.getConfiguration("ghiaAI");
+  const config = vscode14.workspace.getConfiguration("ghiaAI");
   const experimentsEnabled = config.get("enableExperiments", false);
   if (experimentsEnabled) {
     activateExperiments(context);
   }
   const experimentDisabledMessage = 'Experiments are disabled. Enable them in settings: "ghiaAI.enableExperiments": true';
   function isExperimentsEnabled() {
-    return vscode13.workspace.getConfiguration("ghiaAI").get("enableExperiments", false);
+    return vscode14.workspace.getConfiguration("ghiaAI").get("enableExperiments", false);
   }
-  const experimentMenuCommand = vscode13.commands.registerCommand(
+  const experimentMenuCommand = vscode14.commands.registerCommand(
     "ghia-ai.experiment.menu",
     () => {
       if (!isExperimentsEnabled()) {
-        void vscode13.window.showInformationMessage(experimentDisabledMessage);
+        void vscode14.window.showInformationMessage(experimentDisabledMessage);
         return;
       }
       void showExperimentMenu();
     }
   );
-  const experimentStopCommand = vscode13.commands.registerCommand(
+  const experimentStopCommand = vscode14.commands.registerCommand(
     "ghia-ai.experiment.stop",
     () => {
       if (!isExperimentsEnabled()) {
-        void vscode13.window.showInformationMessage(experimentDisabledMessage);
+        void vscode14.window.showInformationMessage(experimentDisabledMessage);
         return;
       }
       clearExperiments();
-      void vscode13.window.showInformationMessage("\u{1F9EA} Experiment stopped.");
+      void vscode14.window.showInformationMessage("\u{1F9EA} Experiment stopped.");
     }
   );
-  const experimentStatusCommand = vscode13.commands.registerCommand(
+  const experimentStatusCommand = vscode14.commands.registerCommand(
     "ghia-ai.experiment.status",
     () => {
       if (!isExperimentsEnabled()) {
-        void vscode13.window.showInformationMessage(experimentDisabledMessage);
+        void vscode14.window.showInformationMessage(experimentDisabledMessage);
         return;
       }
       logExperimentStatus();
@@ -29426,11 +29468,11 @@ function activate(context) {
     "empty-content"
   ];
   const experimentRunCommands = experimentModes.map(
-    (mode) => vscode13.commands.registerCommand(
+    (mode) => vscode14.commands.registerCommand(
       `ghia-ai.experiment.run.${mode}`,
       () => {
         if (!isExperimentsEnabled()) {
-          void vscode13.window.showInformationMessage(experimentDisabledMessage);
+          void vscode14.window.showInformationMessage(experimentDisabledMessage);
           return;
         }
         runExperiment(mode);
@@ -29445,10 +29487,10 @@ function activate(context) {
   );
   prototypeManager = new PrototypeManager(context);
   context.subscriptions.push(prototypeManager);
-  const openPanelCommand = vscode13.commands.registerCommand(
+  const openPanelCommand = vscode14.commands.registerCommand(
     "ghia-ai.openPanel",
     async () => {
-      await vscode13.commands.executeCommand("ghia-ai.openWidePanel");
+      await vscode14.commands.executeCommand("ghia-ai.openWidePanel");
     }
   );
   context.subscriptions.push(openPanelCommand);
@@ -29473,10 +29515,10 @@ function deactivate() {
   panelStatusBar = void 0;
 }
 function showAnswerPanel(markdown, title) {
-  const panel = vscode13.window.createWebviewPanel(
+  const panel = vscode14.window.createWebviewPanel(
     "ghiaAiAnswer",
     title,
-    vscode13.ViewColumn.Beside,
+    vscode14.ViewColumn.Beside,
     { enableScripts: false }
   );
   const html = `<!DOCTYPE html>

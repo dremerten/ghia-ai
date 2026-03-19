@@ -1,10 +1,12 @@
 import * as vscode from "vscode";
 import { StateManager } from "./stateManager";
+import { readEndpointFromFile } from "../utils/endpoint";
 
 const CONFIG_NS = "ghiaAI";
 const ACTION_PREFIX = "action:";
 
 const DEFAULT_MODEL = "llama3";
+const DEFAULT_ENDPOINT = "http://127.0.0.1:11434";
 const OLLAMA_MODELS = ["llama3", "llama3.2", "codellama", "mistral", "phi3"];
 
 type MenuAction = "toggle" | "openSettings" | "showModelMenu";
@@ -47,14 +49,31 @@ export class MenuManager {
   private getConfig(): MenuConfig {
     const config = vscode.workspace.getConfiguration(CONFIG_NS);
     const modelFromConfig = config.get("model");
+    const inspect = config.inspect<string>("ollamaEndpoint");
+    const hasUserEndpoint = Boolean(
+      inspect?.globalValue ?? inspect?.workspaceValue ?? inspect?.workspaceFolderValue
+    );
+    const endpointFromConfig = hasUserEndpoint ? config.get("ollamaEndpoint") : undefined;
+    const fileEndpoint = readEndpointFromFile();
+    const envEndpoint = process.env.GHIA_AI_OLLAMA_ENDPOINT;
     const model =
       typeof modelFromConfig === "string" && modelFromConfig.trim()
         ? modelFromConfig
         : DEFAULT_MODEL;
+
+    const resolvedEndpoint =
+      (typeof endpointFromConfig === "string" && endpointFromConfig.trim()
+        ? endpointFromConfig.trim()
+        : undefined) ??
+      (typeof envEndpoint === "string" && envEndpoint.trim()
+        ? envEndpoint.trim()
+        : undefined) ??
+      fileEndpoint ??
+      DEFAULT_ENDPOINT;
     return {
       model,
       // Default to local Ollama; users can override in settings if remote.
-      ollamaEndpoint: config.get("ollamaEndpoint") ?? "http://127.0.0.1:11434",
+      ollamaEndpoint: resolvedEndpoint,
     };
   }
 

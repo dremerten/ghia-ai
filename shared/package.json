@@ -1,7 +1,7 @@
 {
-  "name": "@codelens-ai/shared",
+  "name": "@ghia-ai/shared",
   "version": "1.0.0",
-  "description": "Shared TypeScript types for codelens-ai monorepo",
+  "description": "Shared TypeScript types for ghia-ai extension",
   "main": "types.ts",
   "types": "types.ts"
 }
