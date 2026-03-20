@@ -5,11 +5,11 @@ import { MenuManager } from "./menuManager";
 /** Priority for right side of status bar; higher values sit further right. */
 const STATUS_BAR_PRIORITY = 100;
 
-const TOOLTIP_ENABLED = "ghia-ai - Click to configure";
-const TOOLTIP_DISABLED = "ghia-ai (disabled) - Click to enable";
+const TOOLTIP_ENABLED = "PyAid - Click to configure";
+const TOOLTIP_DISABLED = "PyAid (disabled) - Click to enable";
 
 /**
- * Manages the ghia-ai status bar item: icon (eye/eye-closed), tooltip, click-to-menu,
+ * Manages the PyAid status bar item: icon (eye/eye-closed), tooltip, click-to-menu,
  * and subscription to StateManager so the icon reflects enabled/disabled state.
  */
 export class StatusBarManager {
@@ -39,13 +39,13 @@ export class StatusBarManager {
    */
   registerClickHandler(context: vscode.ExtensionContext): vscode.Disposable {
     const disposable = vscode.commands.registerCommand(
-      "ghia-ai.statusBarClick",
+      "pyaid.statusBarClick",
       () => {
         this.menuManager.showMainMenu();
       }
     );
     context.subscriptions.push(disposable);
-    this.statusBarItem.command = "ghia-ai.statusBarClick";
+    this.statusBarItem.command = "pyaid.statusBarClick";
     this.statusBarItem.tooltip = this.stateManager.getEnabled()
       ? TOOLTIP_ENABLED
       : TOOLTIP_DISABLED;

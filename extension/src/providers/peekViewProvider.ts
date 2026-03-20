@@ -7,7 +7,7 @@ import { ContextExtractor } from "../utils/contextExtractor";
  * URI scheme for explanation virtual documents.
  * Virtual documents live in memory, not on disk.
  */
-const EXPLAIN_SCHEME = "ghia-explain";
+const EXPLAIN_SCHEME = "PyAid-explain";
 
 /**
  * Stores explanation content keyed by a unique ID for virtual document retrieval.
@@ -23,7 +23,7 @@ interface ExplanationData {
 
 /**
  * Provides content for virtual explanation documents.
- * When VS Code needs to display a `ghia-explain://` URI, this provider
+ * When VS Code needs to display a `PyAid-explain://` URI, this provider
  * returns the formatted explanation content.
  */
 export class ExplanationDocumentProvider
@@ -48,7 +48,7 @@ export class ExplanationDocumentProvider
    * Uses the target language for syntax highlighting in code blocks.
    */
   private formatExplanation(data: ExplanationData): string {
-    const header = `// 🧠 ghia-ai Explanation
+    const header = `// PyAid Explanation
 // Generated: ${new Date(data.timestamp).toLocaleString()}
 // ────────────────────────────────────────────────────────────
 
@@ -155,7 +155,7 @@ export class PeekExplanationProvider implements vscode.Disposable {
       explanation = await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: "ghia-ai: Generating explanation...",
+          title: "PyAid: Generating explanation...",
           cancellable: true,
         },
         async (_progress, token) => {
@@ -261,7 +261,7 @@ export class QuickPeekProvider implements vscode.Disposable {
     if (!explanation) {
       // Show loading quick pick
       const loadingPick = vscode.window.createQuickPick();
-      loadingPick.title = "🧠 ghia-ai";
+      loadingPick.title = "PyAid";
       loadingPick.placeholder = "Generating explanation...";
       loadingPick.busy = true;
       loadingPick.show();
@@ -303,7 +303,7 @@ export class QuickPeekProvider implements vscode.Disposable {
     ];
 
     const selection = await vscode.window.showQuickPick(items, {
-      title: "🧠 ghia-ai Quick Peek",
+      title: "PyAid Quick Peek",
       placeHolder: explanation,
     });
 
@@ -311,7 +311,7 @@ export class QuickPeekProvider implements vscode.Disposable {
       await vscode.env.clipboard.writeText(explanation);
       vscode.window.showInformationMessage("Copied to clipboard");
     } else if (selection?.label.includes("Panel")) {
-      vscode.commands.executeCommand("ghia-ai.explainCode", code, context);
+      vscode.commands.executeCommand("pyaid.explainCode", code, context);
     }
   }
 

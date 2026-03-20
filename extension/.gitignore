@@ -1,3 +1,5 @@
 # Ignore local editor settings
 .vscode/
 
+# Local assistant memory notes (not for commit)
+pyaid.memory.txt

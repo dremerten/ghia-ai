@@ -25,7 +25,7 @@ const DETAILED_LINE_RANGE = 15;
  * User must re-hover to see the result after the fetch completes.
  * Applies a visual highlight to the hovered code block and clears it when the cursor moves away.
  */
-export class GhiaHoverProvider
+export class PyAidHoverProvider
   implements vscode.HoverProvider, vscode.Disposable
 {
   private readonly aiService = new AIService();
@@ -75,7 +75,7 @@ export class GhiaHoverProvider
         }
       });
     this.configListener = vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration("ghiaAI.highlightColor"))
+      if (e.affectsConfiguration("pyaid.highlightColor"))
         this.updateDecorationType();
     });
     this.themeListener = vscode.window.onDidChangeActiveColorTheme(() =>
@@ -111,7 +111,7 @@ export class GhiaHoverProvider
 
   private getHighlightColor(): string {
     const custom = vscode.workspace
-      .getConfiguration("ghiaAI")
+      .getConfiguration("pyaid")
       .get<string>("highlightColor");
     if (custom && custom.trim().length > 0) return custom.trim();
     const kind = vscode.window.activeColorTheme.kind;
@@ -322,7 +322,7 @@ export class GhiaHoverProvider
       this.cacheService.set(code, explanation);
     } catch (err) {
       if (token?.isCancellationRequested) return;
-      console.error("[ghia-ai] fetchExplanation failed", err);
+      console.error("[PyAid] fetchExplanation failed", err);
       const message = err instanceof Error ? err.message : String(err);
       this.cacheService.set(
         code,
@@ -338,15 +338,15 @@ export class GhiaHoverProvider
   ): vscode.MarkdownString {
     const md = new vscode.MarkdownString(undefined, true);
     md.isTrusted = true;
-    md.appendMarkdown("### 🧠 ghia-ai\n\n");
+    md.appendMarkdown("### PyAid\n\n");
     md.appendMarkdown(explanation);
     md.appendMarkdown("\n\n---\n\n");
     const args = encodeURIComponent(JSON.stringify([code, context]));
-    md.appendMarkdown(`[Learn More](command:ghia-ai.explainCode?${args})`);
+    md.appendMarkdown(`[Learn More](command:pyaid.explainCode?${args})`);
     if (explanation.startsWith(CACHED_ERROR_PREFIX)) {
       md.appendMarkdown(" | ");
       md.appendMarkdown(
-        `[Retry](command:ghia-ai.retryHoverExplanation?${args})`
+        `[Retry](command:pyaid.retryHoverExplanation?${args})`
       );
     }
     return md;
@@ -423,7 +423,7 @@ export class GhiaHoverProvider
    * are omitted, uses the active editor's selection.
    */
   async explainCode(code?: string, context?: string): Promise<void> {
-    const panel = this.getOrCreatePanel("ghia-ai: Explanation");
+    const panel = this.getOrCreatePanel("PyAid: Explanation");
     panel.webview.html = getExplanationHtml("Preparing explanation...");
 
     const editor = vscode.window.activeTextEditor;
@@ -506,7 +506,7 @@ export class GhiaHoverProvider
       explanation = await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: "ghia-ai",
+          title: "PyAid",
           cancellable: false,
         },
         async () =>
@@ -543,7 +543,7 @@ export class GhiaHoverProvider
       }
     }
     this.explanationPanel = vscode.window.createWebviewPanel(
-      "ghiaAiExplain",
+      "pyaidExplain",
       title,
       vscode.ViewColumn.Beside,
       { enableScripts: false }

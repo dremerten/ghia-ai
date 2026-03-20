@@ -2,9 +2,14 @@ import * as vscode from "vscode";
 import { AIService } from "../services/aiService";
 import { CacheService } from "../services/cacheService";
 import { ContextExtractor } from "../utils/contextExtractor";
-import { writeWithConsent } from "../utils/fileWriter";
+import {
+  writeWithConsent,
+  removePyAidBlocks,
+  type WriteMode,
+} from "../utils/fileWriter";
+import * as path from "path";
 
-export const ALLOW_WRITE_KEY = "ghiaAI.allowFileWrites";
+export const ALLOW_WRITE_KEY = "pyaid.allowFileWrites";
 
 /**
  * Data structure for explanation history entries.
@@ -29,6 +34,34 @@ interface ConversationEntry {
   kind: "ask" | "explain";
   pending?: boolean;
 }
+interface ChatSession {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  messages: ConversationEntry[];
+}
+
+const SESSION_STORE_KEY = "pyaid.panel.sessions";
+const SESSION_ACTIVE_KEY = "pyaid.panel.activeSession";
+const FLOATING_SESSION_STORE_KEY = "pyaid.floating.sessions";
+const FLOATING_SESSION_ACTIVE_KEY = "pyaid.floating.activeSession";
+
+interface FloatingConversationEntry {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  timestamp: number;
+  pending?: boolean;
+}
+
+interface FloatingChatSession {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  messages: FloatingConversationEntry[];
+}
 
 /**
  * Enhanced Side Panel Provider using VS Code's Webview API.
@@ -50,7 +83,7 @@ interface ConversationEntry {
 export class SidePanelProvider
   implements vscode.WebviewViewProvider, vscode.Disposable
 {
-  public static readonly viewType = "ghia-ai.explanationPanel";
+  public static readonly viewType = "pyaid.explanationPanel";
 
   private readonly aiService = new AIService();
   private readonly cacheService = new CacheService();
@@ -59,7 +92,8 @@ export class SidePanelProvider
   private view?: vscode.WebviewView;
   private iconUrl = "";
   private history: HistoryEntry[] = [];
-  private conversation: ConversationEntry[] = [];
+  private sessions: ChatSession[] = [];
+  private currentSessionId: string | null = null;
   private disposables: vscode.Disposable[] = [];
   private askInFlight = false;
   private pythonFocus = true;
@@ -85,6 +119,7 @@ export class SidePanelProvider
       false
     );
 
+    this.loadSessions();
     // Preload file options
     void this.loadFileOptions();
   }
@@ -93,11 +128,62 @@ export class SidePanelProvider
    * Extracts the first fenced code block content from a markdown string.
    */
   private extractCodeSnippet(answer: string): string | null {
-    const match = answer.match(/```[a-zA-Z0-9_-]*\\n([\\s\\S]*?)```/);
-    if (match && match[1]) {
-      return match[1].trim();
-    }
+    // Prefer the first fenced block (with or without language tag).
+    const fenced =
+      answer.match(/```(?:[^\n`]*)\n([\s\S]*?)```/) ??
+      answer.match(/```([\s\S]*?)```/);
+    if (fenced && fenced[1]) return fenced[1].trim();
+
+    // Fallback: single-line inline code enclosed in backticks.
+    const inline = answer.match(/`([^`]+)`/);
+    if (inline && inline[1]) return inline[1].trim();
+
     return null;
+  }
+
+  /** Choose a comment prefix for markers based on file extension. */
+  private commentPrefix(filePath: string): string {
+    const ext = path.extname(filePath).toLowerCase();
+    if ([".py", ".sh", ".rb", ".pl"].includes(ext)) return "#";
+    if ([".ts", ".tsx", ".js", ".jsx", ".cjs", ".mjs", ".java", ".go", ".c", ".cc", ".cpp", ".h", ".hpp"].includes(ext))
+      return "//";
+    return "//";
+  }
+
+  /** Wraps a snippet with PyAid markers for later removal. */
+  private wrapWithMarkers(snippet: string, targetPath: string): string {
+    const prefix = this.commentPrefix(targetPath);
+    const start = `${prefix} PyAid:start`;
+    const end = `${prefix} PyAid:end`;
+    const body = snippet.trimEnd();
+    return `${start}\n${body}\n${end}\n`;
+  }
+
+  /**
+   * Resolves a target path. If none provided, fall back to the active file when writes are allowed.
+   */
+  private resolveTargetPath(provided?: string): string | undefined {
+    const editor = vscode.window.activeTextEditor;
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+
+    // If user supplied a path, resolve relative to workspace root (first folder) if not absolute.
+    if (provided && provided.trim().length > 0) {
+      const p = provided.trim();
+      if (path.isAbsolute(p)) return p;
+      if (workspaceFolders && workspaceFolders.length > 0) {
+        return path.join(workspaceFolders[0].uri.fsPath, p);
+      }
+      if (editor) {
+        return path.join(path.dirname(editor.document.uri.fsPath), p);
+      }
+      return path.resolve(p);
+    }
+
+    // Fallback: current active file
+    if (editor) {
+      return editor.document.uri.fsPath;
+    }
+    return undefined;
   }
 
   resolveWebviewView(
@@ -113,11 +199,11 @@ export class SidePanelProvider
     };
     this.iconUrl = webviewView.webview
       .asWebviewUri(
-        vscode.Uri.joinPath(this.extensionUri, "media", "ghia-ai.png")
+        vscode.Uri.joinPath(this.extensionUri, "media", "pyaid.png")
       )
       .toString();
 
-    const config = vscode.workspace.getConfiguration("ghiaAI");
+    const config = vscode.workspace.getConfiguration("pyaid");
     this.pythonFocus = config.get("askPythonMode", true);
     this.allowFileWrites = this.context.globalState.get<boolean>(
       ALLOW_WRITE_KEY,
@@ -146,8 +232,22 @@ export class SidePanelProvider
             break;
           case "clearHistory":
             this.history = [];
-            this.conversation = [];
+            this.clearCurrentConversation();
             this.updateView();
+            break;
+          case "newSession":
+            this.addSession(message.title);
+            this.updateView();
+            break;
+          case "switchSession":
+            this.setActiveSession(message.id);
+            this.updateView();
+            break;
+          case "renameSession":
+            if (typeof message.title === "string") {
+              this.renameSession(message.id, message.title);
+              this.updateView();
+            }
             break;
           case "explainSelection":
             await this.explainCurrentSelection();
@@ -156,13 +256,20 @@ export class SidePanelProvider
         await this.handleAsk(message.question, {
           includeSelection: Boolean(message.includeSelection),
           includeFile: Boolean(message.includeFile),
+          targetPath: message.targetPath,
+          writeMode: message.writeMode,
         });
         break;
       case "toggleScope":
         await this.toggleScope();
         break;
       case "toggleWritePermission":
-        this.setAllowFileWrites(Boolean(message.allow));
+        // If caller passes an explicit value, use it; otherwise toggle.
+        this.setAllowFileWrites(
+          typeof message.allow === "boolean"
+            ? message.allow
+            : !this.allowFileWrites
+        );
         break;
     }
   },
@@ -292,23 +399,25 @@ export class SidePanelProvider
 
     // Also surface in the conversation stream for a chat-like feel
     const now = Date.now();
-    this.conversation.push(
-      {
-        id: this.generateId(),
-        role: "user",
-        content: `Explain ${fileName.split("/").pop()}:${lineNumber}`,
-        timestamp: now,
-        kind: "explain",
-      },
-      {
-        id: this.generateId(),
-        role: "assistant",
-        content: explanation,
-        timestamp: now,
-        kind: "explain",
-      }
-    );
-    this.trimConversation();
+    this.updateSessionConversation((messages) => {
+      messages.push(
+        {
+          id: this.generateId(),
+          role: "user",
+          content: `Explain ${fileName.split("/").pop()}:${lineNumber}`,
+          timestamp: now,
+          kind: "explain",
+        },
+        {
+          id: this.generateId(),
+          role: "assistant",
+          content: explanation,
+          timestamp: now,
+          kind: "explain",
+        }
+      );
+      this.trimConversation(messages);
+    });
 
     this.updateView();
   }
@@ -356,7 +465,7 @@ export class SidePanelProvider
       includeSelection: boolean;
       includeFile: boolean;
       targetPath?: string;
-      writeMode?: "append" | "replace";
+      writeMode?: WriteMode;
     }
   ): Promise<void> {
     const trimmed = question?.trim();
@@ -409,8 +518,10 @@ export class SidePanelProvider
       pending: true,
     };
 
-    this.conversation.push(userEntry, assistantPlaceholder);
-    this.trimConversation();
+    this.updateSessionConversation((messages) => {
+      messages.push(userEntry, assistantPlaceholder);
+      this.trimConversation(messages);
+    });
 
     this.askInFlight = true;
     this.updateView();
@@ -423,21 +534,7 @@ export class SidePanelProvider
         this.pythonFocus
       );
 
-      // Optional: write answer to file when allowed and target provided
-      if (this.allowFileWrites && options.targetPath) {
-        try {
-          const snippet = this.extractCodeSnippet(answer) ?? answer;
-          await writeWithConsent(
-            options.targetPath,
-            snippet,
-            options.writeMode ?? "append",
-            true
-          );
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          vscode.window.showErrorMessage(`ghia-ai write failed: ${msg}`);
-        }
-      }
+      await this.maybeWriteAnswer(answer, options);
       this.replaceConversationEntry(assistantPlaceholder.id, {
         ...assistantPlaceholder,
         content: answer,
@@ -494,11 +591,20 @@ export class SidePanelProvider
    */
   private updateView(): void {
     if (this.view) {
+      const activeSession = this.getActiveSession();
       this.view.webview.postMessage({
         type: "update",
         explanation: this.currentExplanation,
         history: this.history.slice(0, 10),
-        conversation: this.conversation,
+        conversation: activeSession.messages,
+        sessions: this.sessions.map((s) => ({
+          id: s.id,
+          title: s.title,
+          updatedAt: s.updatedAt,
+          createdAt: s.createdAt,
+          messageCount: s.messages.length,
+        })),
+        activeSessionId: this.currentSessionId,
         contextHints: this.getContextHints(),
         busy: this.currentExplanation?.isLoading || this.askInFlight,
         pythonFocus: this.pythonFocus,
@@ -506,6 +612,105 @@ export class SidePanelProvider
         fileOptions: this.fileOptions,
       });
     }
+  }
+
+  private loadSessions(): void {
+    const stored = this.context.globalState.get<ChatSession[]>(
+      SESSION_STORE_KEY,
+      []
+    );
+    this.sessions = Array.isArray(stored) ? stored : [];
+
+    if (this.sessions.length === 0) {
+      const first = this.createSession("Session 1");
+      this.sessions.push(first);
+    }
+
+    const storedActive = this.context.globalState.get<string | null>(
+      SESSION_ACTIVE_KEY,
+      null
+    );
+    if (storedActive && this.sessions.some((s) => s.id === storedActive)) {
+      this.currentSessionId = storedActive;
+    } else {
+      this.currentSessionId = this.sessions[0].id;
+    }
+
+    void this.persistSessions();
+  }
+
+  private createSession(title?: string): ChatSession {
+    const now = Date.now();
+    return {
+      id: this.generateId(),
+      title: title ?? `Session ${this.sessions.length + 1}` ,
+      createdAt: now,
+      updatedAt: now,
+      messages: [],
+    };
+  }
+
+  private getActiveSession(): ChatSession {
+    if (this.currentSessionId) {
+      const existing = this.sessions.find((s) => s.id === this.currentSessionId);
+      if (existing) return existing;
+    }
+    const fallback = this.createSession("Session 1");
+    this.sessions.unshift(fallback);
+    this.currentSessionId = fallback.id;
+    void this.persistSessions();
+    return fallback;
+  }
+
+  private setActiveSession(id: string): void {
+    const found = this.sessions.find((s) => s.id === id);
+    if (!found) return;
+    this.currentSessionId = id;
+    found.updatedAt = Date.now();
+    void this.persistSessions();
+  }
+
+  private addSession(title?: string): void {
+    const session = this.createSession(title);
+    this.sessions.unshift(session);
+    this.currentSessionId = session.id;
+    void this.persistSessions();
+  }
+
+  private renameSession(id: string, title: string): void {
+    const session = this.sessions.find((s) => s.id === id);
+    if (!session) return;
+    session.title = title.trim() || session.title;
+    session.updatedAt = Date.now();
+    void this.persistSessions();
+  }
+
+  private clearCurrentConversation(): void {
+    const session = this.getActiveSession();
+    session.messages = [];
+    session.updatedAt = Date.now();
+    void this.persistSessions();
+  }
+
+  private persistSessions(): Promise<void> {
+    // Keep most recently updated sessions at the top
+    this.sessions = this.sessions
+      .slice()
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+    return Promise.all([
+      this.context.globalState.update(SESSION_STORE_KEY, this.sessions),
+      this.context.globalState.update(SESSION_ACTIVE_KEY, this.currentSessionId),
+    ]).then(() => undefined);
+  }
+
+  private updateSessionConversation(
+    updater: (messages: ConversationEntry[]) => void
+  ): ConversationEntry[] {
+    const session = this.getActiveSession();
+    updater(session.messages);
+    session.updatedAt = Date.now();
+    void this.persistSessions();
+    return session.messages;
   }
 
   private async loadFileOptions(): Promise<void> {
@@ -565,16 +770,18 @@ export class SidePanelProvider
     id: string,
     replacement: ConversationEntry
   ): void {
-    const idx = this.conversation.findIndex((c) => c.id === id);
-    if (idx >= 0) {
-      this.conversation[idx] = replacement;
-    }
+    this.updateSessionConversation((messages) => {
+      const idx = messages.findIndex((c) => c.id === id);
+      if (idx >= 0) {
+        messages[idx] = replacement;
+      }
+    });
   }
 
-  private trimConversation(): void {
+  private trimConversation(messages: ConversationEntry[]): void {
     const MAX_ENTRIES = 40;
-    if (this.conversation.length > MAX_ENTRIES) {
-      this.conversation = this.conversation.slice(-MAX_ENTRIES);
+    if (messages.length > MAX_ENTRIES) {
+      messages.splice(0, messages.length - MAX_ENTRIES);
     }
   }
 
@@ -588,8 +795,8 @@ export class SidePanelProvider
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
-  <title>ghia-ai panel</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src vscode-webview-resource: https: data:; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
+  <title>PyAid panel</title>
   <style>
     :root {
       --surface: var(--vscode-sideBar-background);
@@ -715,6 +922,9 @@ export class SidePanelProvider
     }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     .chat-stream { display: flex; flex-direction: column; gap: 8px; max-height: 40vh; overflow-y: auto; padding-right: 4px; }
+    .session-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 6px 0 4px; }
+    .session-select { flex: 1; border: 1px solid var(--border); background: var(--vscode-editor-background); color: var(--vscode-foreground); border-radius: 6px; padding: 8px; font-family: var(--vscode-font-family); }
+    .session-actions { display: flex; gap: 6px; }
     .bubble {
       border: 1px solid var(--border);
       border-radius: 10px;
@@ -764,6 +974,9 @@ export class SidePanelProvider
     .history-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
     .history-item { cursor: pointer; padding: 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--vscode-editor-background); }
     .history-item:hover { border-color: var(--accent); }
+    .code-block { position: relative; margin: 8px 0; }
+    .code-block pre { margin: 0; padding: 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--vscode-editor-background); overflow-x: auto; }
+    .code-block button.copy-btn { position: absolute; top: 6px; right: 6px; border: 1px solid var(--border); background: var(--card); cursor: pointer; }
   </style>
 </head>
 <body>
@@ -772,7 +985,7 @@ export class SidePanelProvider
       <div class="title">
         <div class="title-row">
           <span class="pill">Panel</span>
-          <h1><img src="${this.iconUrl}" alt="ghia-ai" style="width:18px;height:18px;border-radius:4px;"> ghia-ai</h1>
+          <h1><img src="${this.iconUrl}" alt="PyAid" style="width:18px;height:18px;border-radius:4px;"> PyAid</h1>
         </div>
         <div class="subtitle">Ask, explain, and keep context pinned like a sidekick.</div>
       </div>
@@ -796,7 +1009,14 @@ export class SidePanelProvider
     <div class="section">
       <div class="section-title">
         <span>Conversation</span>
-        <button class="btn ghost" onclick="clearHistory()" style="font-size:11px; padding:4px 8px;">Clear</button>
+        <button class="btn ghost" onclick="clearHistory()" style="font-size:11px; padding:4px 8px;">Clear Session</button>
+      </div>
+      <div class="session-bar">
+        <select id="session-select" class="session-select"></select>
+        <div class="session-actions">
+          <button class="btn ghost" onclick="newSession()">New</button>
+          <button class="btn ghost" onclick="renameSession()">Rename</button>
+        </div>
       </div>
       <div id="chat-stream" class="chat-stream"></div>
     </div>
@@ -813,16 +1033,8 @@ export class SidePanelProvider
         <span class="hint">Python-heavy answers when on; general answers when off.</span>
       </div>
       <form id="composer" class="composer">
-        <div class="chips">
-          <label class="chip">
-            <input type="checkbox" id="include-selection"> Selection
-          </label>
-          <label class="chip">
-            <input type="checkbox" id="include-file" checked> Current file
-          </label>
-          <span class="hint" id="context-hint"></span>
-        </div>
-        <div class="chips" id="write-controls">
+        <div class="hint" id="context-hint"></div>
+        <div class="chips" id="write-controls" style="display:${this.allowFileWrites ? "flex" : "none"}">
           <label class="chip">
             Target file:
             <input list="file-options" type="text" id="target-file" placeholder="e.g. start.py" style="width:180px;">
@@ -833,6 +1045,7 @@ export class SidePanelProvider
             <select id="write-mode">
               <option value="append">Append</option>
               <option value="replace">Replace</option>
+              <option value="remove">Remove PyAid blocks</option>
             </select>
           </label>
           <span class="hint">Enabled when writes are allowed.</span>
@@ -855,24 +1068,27 @@ export class SidePanelProvider
 
   <script>
     const vscode = acquireVsCodeApi();
-    let latestContextHints = { hasSelection: false, selectionLabel: null, hasFile: false, fileName: null };
+    let latestContextHints = { fileName: null };
     let latestConversation = [];
     let thinkTimer = null;
     let thinkingIndex = 0;
     const thinkingEmojis = ["🤔", "🌀", "💭", "✨", "⌛"];
     let allowWrites = false;
     let messageFileOptions = [];
+    let latestSessions = [];
+    let activeSessionId = null;
 
     document.getElementById('composer').addEventListener('submit', (event) => {
       event.preventDefault();
       const question = document.getElementById('question').value;
-      const includeSelection = document.getElementById('include-selection').checked;
-      const includeFile = document.getElementById('include-file').checked;
+      const includeSelection = true;
+      const includeFile = true;
       const targetPath = document.getElementById('target-file').value || undefined;
       const writeMode = document.getElementById('write-mode').value || "append";
       vscode.postMessage({ command: 'ask', question, includeSelection, includeFile, targetPath, writeMode });
       document.getElementById('question').value = '';
     });
+    document.getElementById('session-select').addEventListener('change', handleSessionChange);
 
     function explainSelection() { vscode.postMessage({ command: 'explainSelection' }); }
     function copyExplanation() { vscode.postMessage({ command: 'copy' }); }
@@ -888,10 +1104,67 @@ export class SidePanelProvider
       vscode.postMessage({ command: 'toggleWritePermission', allow: !allowWrites });
     }
 
+    function newSession() {
+      const defaultName = 'Session ' + String((latestSessions?.length || 0) + 1);
+      const title = prompt('Name this session', defaultName);
+      if (title !== null) {
+        vscode.postMessage({ command: 'newSession', title });
+      }
+    }
+
+    function renameSession() {
+      if (!activeSessionId) return;
+      const current = latestSessions.find((s) => s.id === activeSessionId);
+      const title = prompt('Rename session', current?.title || '');
+      if (title !== null && title.trim().length > 0) {
+        vscode.postMessage({ command: 'renameSession', id: activeSessionId, title });
+      }
+    }
+
+    function handleSessionChange(event) {
+      const id = event.target.value;
+      if (id) {
+        vscode.postMessage({ command: 'switchSession', id });
+      }
+    }
+
     function escapeHtml(text) {
       const div = document.createElement('div');
       div.textContent = text ?? '';
       return div.innerHTML;
+    }
+
+    function renderWithCodeBlocks(text) {
+      if (!text) return "";
+      const tick = String.fromCharCode(96);
+      const fence = new RegExp(tick + tick + tick + "[\\s\\S]*?" + tick + tick + tick, "g");
+      let out = "";
+      let lastIndex = 0;
+      let match;
+      while ((match = fence.exec(text))) {
+        // text before code block
+        out += escapeHtml(text.slice(lastIndex, match.index));
+        const code = match[0].slice(3, -3).trim();
+        out +=
+          '<div class="code-block"><button class="copy-btn" data-code="' +
+          encodeURIComponent(code) +
+          '">📋</button><pre><code>' +
+          escapeHtml(code) +
+          "</code></pre></div>";
+        lastIndex = match.index + match[0].length;
+      }
+      out += escapeHtml(text.slice(lastIndex));
+      return out;
+    }
+
+    function attachCopyButtons(root) {
+      root.querySelectorAll('.copy-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const encoded = btn.getAttribute('data-code') || '';
+          const decoded = decodeURIComponent(encoded);
+          navigator.clipboard.writeText(decoded);
+        });
+      });
     }
 
     function formatTime(timestamp) {
@@ -926,13 +1199,14 @@ export class SidePanelProvider
 
       liveCard.className = 'card';
       liveCard.innerHTML = \`
-        <div class="explanation-text">\${escapeHtml(explanation.explanation)}</div>
+        <div class="explanation-text">\${renderWithCodeBlocks(explanation.explanation)}</div>
         \${codePreview}
         <div class="actions">
           <button class="btn" onclick="copyExplanation()">📋 Copy</button>
           <button class="btn" onclick="refreshExplanation()">🔄 Refresh</button>
         </div>
       \`;
+      attachCopyButtons(liveCard);
       hint.textContent = explanation.languageId ? explanation.languageId : '';
     }
 
@@ -948,14 +1222,15 @@ export class SidePanelProvider
         const status = entry.pending
           ? ' (' + thinkingEmojis[thinkingIndex % thinkingEmojis.length] + ' thinking…)'
           : '';
-        const displayContent = entry.content;
+        const displayContent = renderWithCodeBlocks(entry.content);
         return \`
           <div class="bubble \${entry.role}">
             <div class="meta">\${meta}\${status}</div>
-            <div class="content">\${escapeHtml(displayContent)}</div>
+            <div class="content">\${displayContent}</div>
           </div>
         \`;
       }).join('');
+      attachCopyButtons(stream);
       stream.scrollTop = stream.scrollHeight;
     }
 
@@ -976,19 +1251,28 @@ export class SidePanelProvider
       \`).join('');
     }
 
+    function renderSessions(sessions, selectedId) {
+      latestSessions = sessions || [];
+      activeSessionId = selectedId || (latestSessions[0]?.id ?? null);
+      const select = document.getElementById('session-select');
+      if (!select) return;
+      select.innerHTML = latestSessions
+        .map((s) => {
+          const time = new Date(s.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          const selected = s.id === activeSessionId ? 'selected' : '';
+          return '<option value= + s.id +  ' + selected + '>' + escapeHtml(s.title) + ' • ' + time + '</option>';
+        })
+        .join('');
+      select.value = activeSessionId || '';
+    }
+
     function renderContextHints(hints) {
       latestContextHints = hints || latestContextHints;
-      const selectionBox = document.getElementById('include-selection');
-      const fileBox = document.getElementById('include-file');
       const targetInput = document.getElementById('target-file');
       const modeSelect = document.getElementById('write-mode');
       const datalist = document.getElementById('file-options');
-      selectionBox.disabled = !latestContextHints.hasSelection;
-      if (!latestContextHints.hasSelection) selectionBox.checked = false;
-      document.getElementById('context-hint').textContent = latestContextHints.selectionLabel || latestContextHints.fileName || '';
+      document.getElementById('context-hint').textContent = latestContextHints.fileName || '';
       document.getElementById('refresh-btn').style.display = 'inline-flex';
-      fileBox.disabled = !latestContextHints.hasFile;
-      if (!latestContextHints.hasFile) fileBox.checked = false;
       targetInput.disabled = !allowWrites;
       modeSelect.disabled = !allowWrites;
       if (datalist && Array.isArray(messageFileOptions)) {
@@ -1019,15 +1303,25 @@ export class SidePanelProvider
     function setWriteToggle(enabled) {
       allowWrites = !!enabled;
       const btn = document.getElementById('write-toggle');
-      if (!btn) return;
-      btn.textContent = enabled ? 'Allow writes: On' : 'Allow writes: Off';
-      btn.classList.toggle('primary', enabled);
+      if (btn) {
+        btn.textContent = enabled ? 'Allow writes: On' : 'Allow writes: Off';
+        btn.classList.toggle('primary', enabled);
+      }
+      const writeControls = document.getElementById('write-controls');
+      if (writeControls) {
+        writeControls.style.display = enabled ? 'flex' : 'none';
+      }
+      const tgt = document.getElementById('target-file');
+      const mode = document.getElementById('write-mode');
+      if (tgt) tgt.disabled = !enabled;
+      if (mode) mode.disabled = !enabled;
     }
 
     window.addEventListener('message', event => {
       const message = event.data;
       if (message.type === 'update') {
         renderExplanation(message.explanation);
+        renderSessions(message.sessions, message.activeSessionId);
         renderConversation(message.conversation);
         renderHistory(message.history);
         renderContextHints(message.contextHints);
@@ -1065,7 +1359,7 @@ export class SidePanelProvider
   private async toggleScope(): Promise<void> {
     this.pythonFocus = !this.pythonFocus;
     await vscode.workspace
-      .getConfiguration("ghiaAI")
+      .getConfiguration("pyaid")
       .update("askPythonMode", this.pythonFocus, vscode.ConfigurationTarget.Global);
     this.updateView();
   }
@@ -1076,6 +1370,112 @@ export class SidePanelProvider
     this.updateView();
   }
 
+  /**
+   * Writes a snippet directly into the active editor when possible.
+   * Returns true if an edit was applied (and saved), false otherwise.
+   */
+  private async writeSnippetToEditor(
+    snippet: string,
+    mode: WriteMode
+  ): Promise<boolean> {
+    if (mode === "remove") return false;
+    const editor = vscode.window.activeTextEditor;
+    const doc = editor?.document;
+    if (!editor || !doc) return false;
+
+    const edit = new vscode.WorkspaceEdit();
+    const uri = doc.uri;
+
+    if (mode === "replace") {
+      if (editor.selection && !editor.selection.isEmpty) {
+        edit.replace(uri, editor.selection, snippet);
+      } else {
+        const lastLine = doc.lineCount - 1;
+        const fullRange = new vscode.Range(
+          new vscode.Position(0, 0),
+          new vscode.Position(
+            lastLine,
+            doc.lineAt(Math.max(lastLine, 0)).text.length
+          )
+        );
+        edit.replace(uri, fullRange, snippet);
+      }
+    } else {
+      const insertPos = editor.selection?.end ?? new vscode.Position(
+        doc.lineCount,
+        doc.lineAt(Math.max(doc.lineCount - 1, 0)).text.length
+      );
+      const toInsert = snippet.endsWith("\n") ? snippet : snippet + "\n";
+      edit.insert(uri, insertPos, toInsert);
+    }
+
+    const applied = await vscode.workspace.applyEdit(edit);
+    if (applied) {
+      await doc.save().catch(() => {/* ignore save errors */});
+      void vscode.window.showInformationMessage("PyAid wrote to editor");
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Centralized write logic: append, replace (after removing existing PyAid blocks),
+   * or remove previously written PyAid blocks.
+   */
+  private async maybeWriteAnswer(
+    answer: string,
+    options: { targetPath?: string; writeMode?: WriteMode }
+  ): Promise<void> {
+    if (!this.allowFileWrites) return;
+    const mode = options.writeMode ?? "append";
+    const targetPath = this.resolveTargetPath(options.targetPath);
+    const snippet = mode === "remove" ? "" : this.extractCodeSnippet(answer) ?? answer;
+
+    // Removal path
+    if (mode === "remove") {
+      if (!targetPath) {
+        void vscode.window.showWarningMessage(
+          "PyAid: Choose a target file to remove PyAid code from."
+        );
+        return;
+      }
+      await removePyAidBlocks(targetPath).catch((err) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        vscode.window.showErrorMessage(`PyAid remove failed: ${msg}`);
+      });
+      return;
+    }
+
+    if (!snippet || snippet.trim().length === 0) {
+      void vscode.window.showWarningMessage("PyAid: No code block found to write.");
+      return;
+    }
+
+    const payload = targetPath
+      ? this.wrapWithMarkers(snippet, targetPath)
+      : snippet;
+
+    if (targetPath) {
+      if (mode === "replace") {
+        await removePyAidBlocks(targetPath).catch(() => {});
+      }
+      const finalPayload =
+        mode === "append"
+          ? payload.endsWith("\n") ? payload : payload + "\n"
+          : payload;
+      await writeWithConsent(targetPath, finalPayload, mode, true).catch(
+        (err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          vscode.window.showErrorMessage(`PyAid write failed: ${msg}`);
+        }
+      );
+      return;
+    }
+
+    // No target path: write into active editor
+    await this.writeSnippetToEditor(snippet, mode);
+  }
+
   dispose(): void {
     this.disposables.forEach((d) => d.dispose());
   }
@@ -1083,8 +1483,7 @@ export class SidePanelProvider
 
 /**
  * Alternative: Floating Webview Panel.
- * Creates a webview panel that appears beside the editor (like "Learn More" does now).
- * Use this when you want a standalone panel rather than a sidebar view.
+ * Opens beside the current editor and behaves like a chat-first assistant.
  */
 export class FloatingPanelProvider implements vscode.Disposable {
   private readonly aiService = new AIService();
@@ -1093,12 +1492,13 @@ export class FloatingPanelProvider implements vscode.Disposable {
 
   private panel: vscode.WebviewPanel | null = null;
   private disposables: vscode.Disposable[] = [];
-   // In-panel chat history for context across questions
-  private conversation: { role: "user" | "assistant"; content: string }[] = [];
   private pythonFocus = true;
   private allowFileWrites = false;
   private fileOptions: string[] = [];
   private iconUrl = "";
+  private cspSource = "";
+  private sessions: FloatingChatSession[] = [];
+  private activeSessionId: string | null = null;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -1108,24 +1508,161 @@ export class FloatingPanelProvider implements vscode.Disposable {
       ALLOW_WRITE_KEY,
       false
     );
+    this.loadSessions();
     void this.loadFileOptions();
   }
 
-  /**
-   * Opens an empty ghia-ai panel to the right, sized evenly with the editor.
-   * Useful for pre-opening the space before asking a question.
-   */
+  private loadSessions(): void {
+    const stored = this.context.globalState.get<FloatingChatSession[]>(
+      FLOATING_SESSION_STORE_KEY,
+      []
+    );
+    this.sessions = Array.isArray(stored) ? stored : [];
+
+    if (this.sessions.length === 0) {
+      const session = this.createSession("Session 1");
+      this.sessions.push(session);
+    }
+
+    const active = this.context.globalState.get<string | null>(
+      FLOATING_SESSION_ACTIVE_KEY,
+      null
+    );
+    if (active && this.sessions.some((s) => s.id === active)) {
+      this.activeSessionId = active;
+    } else {
+      this.activeSessionId = this.sessions[0].id;
+    }
+
+    void this.persistSessions();
+  }
+
+  private createSession(title?: string): FloatingChatSession {
+    const now = Date.now();
+    return {
+      id: this.generateId(),
+      title: title ?? `Session ${this.sessions.length + 1}`,
+      createdAt: now,
+      updatedAt: now,
+      messages: [],
+    };
+  }
+
+  private getActiveSession(): FloatingChatSession {
+    if (this.activeSessionId) {
+      const found = this.sessions.find((s) => s.id === this.activeSessionId);
+      if (found) return found;
+    }
+    const fallback = this.createSession("Session 1");
+    this.sessions.unshift(fallback);
+    this.activeSessionId = fallback.id;
+    void this.persistSessions();
+    return fallback;
+  }
+
+  private updateSessionMessages(
+    updater: (messages: FloatingConversationEntry[]) => void
+  ): void {
+    const session = this.getActiveSession();
+    updater(session.messages);
+    this.trimMessages(session.messages);
+    session.updatedAt = Date.now();
+    void this.persistSessions();
+  }
+
+  private addSession(title?: string): void {
+    const session = this.createSession(title);
+    this.sessions.unshift(session);
+    this.activeSessionId = session.id;
+    void this.persistSessions();
+  }
+
+  private switchSession(id: string): void {
+    const found = this.sessions.find((s) => s.id === id);
+    if (!found) return;
+    this.activeSessionId = id;
+    found.updatedAt = Date.now();
+    void this.persistSessions();
+  }
+
+  private renameSession(id: string, title: string): void {
+    const found = this.sessions.find((s) => s.id === id);
+    if (!found) return;
+    const nextTitle = title.trim();
+    if (!nextTitle) return;
+    found.title = nextTitle;
+    found.updatedAt = Date.now();
+    void this.persistSessions();
+  }
+
+  private deleteSession(id: string): void {
+    const idx = this.sessions.findIndex((s) => s.id === id);
+    if (idx < 0) return;
+
+    this.sessions.splice(idx, 1);
+
+    if (this.sessions.length === 0) {
+      const fallback = this.createSession("Session 1");
+      this.sessions.push(fallback);
+      this.activeSessionId = fallback.id;
+    } else if (this.activeSessionId === id) {
+      this.activeSessionId = this.sessions[0].id;
+    }
+
+    void this.persistSessions();
+  }
+
+  private clearActiveSession(): void {
+    const session = this.getActiveSession();
+    session.messages = [];
+    session.updatedAt = Date.now();
+    void this.persistSessions();
+  }
+
+  private persistSessions(): Promise<void> {
+    this.sessions = this.sessions
+      .slice()
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+    return Promise.all([
+      this.context.globalState.update(FLOATING_SESSION_STORE_KEY, this.sessions),
+      this.context.globalState.update(FLOATING_SESSION_ACTIVE_KEY, this.activeSessionId),
+    ]).then(() => undefined);
+  }
+
+  private trimMessages(messages: FloatingConversationEntry[]): void {
+    const MAX = 60;
+    if (messages.length > MAX) {
+      messages.splice(0, messages.length - MAX);
+    }
+  }
+
+  private generateId(): string {
+    return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  }
+
+  private async loadFileOptions(): Promise<void> {
+    try {
+      const uris = await vscode.workspace.findFiles(
+        "**/*",
+        "**/{node_modules,.git,.svn,.hg,.DS_Store,.venv,.tox,.next,out,dist,build,tmp,temp}/**",
+        120
+      );
+      this.fileOptions = uris
+        .map((u) => vscode.workspace.asRelativePath(u, false))
+        .filter((f) => f && !f.endsWith("/"));
+    } catch {
+      this.fileOptions = [];
+    }
+  }
+
   openPanel(): void {
-    const config = vscode.workspace.getConfiguration("ghiaAI");
+    const config = vscode.workspace.getConfiguration("pyaid");
     this.pythonFocus = config.get("askPythonMode", true);
     this.ensurePanel();
-    this.panel!.webview.html = this.getWelcomeHtml();
+    this.panel!.webview.html = this.renderChatHtml();
     this.evenEditorWidths();
   }
 
-  /**
-   * Shows explanation in a floating webview panel beside the editor.
-   */
   async showExplanation(code?: string, context?: string): Promise<void> {
     const editor = vscode.window.activeTextEditor;
     if (!editor && !code) {
@@ -1133,17 +1670,14 @@ export class FloatingPanelProvider implements vscode.Disposable {
       return;
     }
 
-    // Get code if not provided
-    if (!code) {
-      const document = editor!.document;
-      const selection = editor!.selection;
-
+    if (!code && editor) {
+      const selection = editor.selection;
       if (!selection.isEmpty) {
-        code = document.getText(selection).trim();
+        code = editor.document.getText(selection).trim();
         context = "";
       } else {
         const extracted = this.contextExtractor.extract(
-          document,
+          editor.document,
           selection.active
         );
         code = extracted.code;
@@ -1156,35 +1690,56 @@ export class FloatingPanelProvider implements vscode.Disposable {
       return;
     }
 
-    // Create or reveal panel
     this.ensurePanel();
     this.panel!.reveal(vscode.ViewColumn.Beside);
     this.evenEditorWidths();
 
-    // Show loading state
-    this.panel!.webview.html = this.getLoadingHtml(code);
-
-    // Get explanation
     const languageId = editor?.document.languageId ?? "plaintext";
-    let explanation = this.cacheService.get(code);
+    const fileLabel = editor?.document.fileName.split("/").pop() ?? "selection";
+    const userPrompt = `Explain ${fileLabel} (${languageId})`;
 
+    const userEntry: FloatingConversationEntry = {
+      id: this.generateId(),
+      role: "user",
+      content: userPrompt,
+      timestamp: Date.now(),
+    };
+    const placeholder: FloatingConversationEntry = {
+      id: this.generateId(),
+      role: "assistant",
+      content: "Thinking...",
+      timestamp: Date.now(),
+      pending: true,
+    };
+
+    this.updateSessionMessages((messages) => {
+      messages.push(userEntry, placeholder);
+    });
+    this.panel!.webview.html = this.renderChatHtml(true);
+
+    let explanation = this.cacheService.get(code);
     if (!explanation) {
       try {
-        explanation = await this.aiService.explain(
-          code,
-          languageId,
-          context ?? ""
-        );
+        explanation = await this.aiService.explain(code, languageId, context ?? "");
         this.cacheService.set(code, explanation);
       } catch (err) {
-        explanation = `Error: ${
-          err instanceof Error ? err.message : String(err)
-        }`;
+        explanation = `Error: ${err instanceof Error ? err.message : String(err)}`;
       }
     }
 
-    // Update with result
-    this.panel!.webview.html = this.getResultHtml(code, explanation, languageId);
+    this.updateSessionMessages((messages) => {
+      const idx = messages.findIndex((m) => m.id === placeholder.id);
+      if (idx >= 0) {
+        messages[idx] = {
+          ...placeholder,
+          content: `${explanation}\n\nCode:\n\`\`\`${languageId}\n${code}\n\`\`\``,
+          pending: false,
+          timestamp: Date.now(),
+        };
+      }
+    });
+
+    this.panel!.webview.html = this.renderChatHtml();
   }
 
   private ensurePanel(): void {
@@ -1192,9 +1747,10 @@ export class FloatingPanelProvider implements vscode.Disposable {
       this.panel.reveal(vscode.ViewColumn.Beside);
       return;
     }
+
     this.panel = vscode.window.createWebviewPanel(
-      "ghia-ai.floatingPanel",
-      "🧠 ghia-ai",
+      "pyaid.floatingPanel",
+      "PyAid",
       vscode.ViewColumn.Beside,
       {
         enableScripts: true,
@@ -1211,30 +1767,73 @@ export class FloatingPanelProvider implements vscode.Disposable {
     );
 
     this.iconUrl = this.panel.webview
-      .asWebviewUri(
-        vscode.Uri.joinPath(this.extensionUri, "media", "ghia-ai.png")
-      )
+      .asWebviewUri(vscode.Uri.joinPath(this.extensionUri, "media", "pyaid.png"))
       .toString();
+    this.cspSource = this.panel.webview.cspSource;
 
     this.panel.webview.onDidReceiveMessage(
       async (message) => {
-        if (message.command === "copy" && message.text) {
-          await vscode.env.clipboard.writeText(message.text);
-          vscode.window.showInformationMessage("Copied to clipboard");
-        } else if (message.command === "ask" && typeof message.text === "string") {
-          await this.handleAsk(message.text, {
-            includeSelection: Boolean(message.includeSelection),
-            includeFile: Boolean(message.includeFile),
-            targetPath: message.targetPath,
-            writeMode: message.writeMode,
-          });
-        } else if (message.command === "clear") {
-          this.conversation = [];
-          this.panel!.webview.html = this.renderChatHtml();
-        } else if (message.command === "toggleScope") {
-          await this.toggleScope();
-        } else if (message.command === "toggleWritePermission") {
-          await this.setAllowFileWrites(!this.allowFileWrites);
+        switch (message.command) {
+          case "copy":
+            if (typeof message.text === "string") {
+              await vscode.env.clipboard.writeText(message.text);
+              void vscode.window.showInformationMessage("Copied to clipboard");
+            }
+            break;
+          case "ask":
+            if (typeof message.text === "string") {
+              await this.handleAsk(message.text, {
+                includeSelection: Boolean(message.includeSelection),
+                includeFile: Boolean(message.includeFile),
+                targetPath: message.targetPath,
+                writeMode: message.writeMode,
+              });
+            }
+            break;
+          case "clearSession":
+            this.clearActiveSession();
+            this.panel!.webview.html = this.renderChatHtml();
+            break;
+          case "newSession":
+            this.addSession(
+              typeof message.title === "string" ? message.title : undefined
+            );
+            this.panel!.webview.html = this.renderChatHtml();
+            break;
+          case "switchSession":
+            if (typeof message.id === "string") {
+              this.switchSession(message.id);
+              this.panel!.webview.html = this.renderChatHtml();
+            }
+            break;
+          case "renameSession":
+            if (
+              typeof message.id === "string" &&
+              typeof message.title === "string"
+            ) {
+              this.renameSession(message.id, message.title);
+              this.panel!.webview.html = this.renderChatHtml();
+            }
+            break;
+          case "deleteSession":
+            if (typeof message.id === "string") {
+              this.deleteSession(message.id);
+              this.panel!.webview.html = this.renderChatHtml();
+            }
+            break;
+          case "toggleScope":
+            await this.toggleScope();
+            break;
+          case "toggleWritePermission":
+            await this.setAllowFileWrites(
+              typeof message.allow === "boolean"
+                ? message.allow
+                : !this.allowFileWrites
+            );
+            break;
+          case "explainSelection":
+            await this.showExplanation();
+            break;
         }
       },
       null,
@@ -1242,98 +1841,45 @@ export class FloatingPanelProvider implements vscode.Disposable {
     );
   }
 
+  private async setAllowFileWrites(enabled: boolean): Promise<void> {
+    this.allowFileWrites = enabled;
+    await this.context.globalState.update(ALLOW_WRITE_KEY, enabled);
+    if (this.panel) {
+      this.panel.webview.html = this.renderChatHtml();
+    }
+  }
+
   private evenEditorWidths(): void {
     void vscode.commands.executeCommand("workbench.action.evenEditorWidths");
   }
 
-  private getWelcomeHtml(): string {
-    const optionsHtml = this.fileOptions
-      .map((opt) => `<option value="${this.escapeHtml(opt)}"></option>`)
-      .join("");
-    return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-editor-background); padding: 1.5rem; line-height: 1.6; }
-    h1 { margin: 0 0 0.25rem; }
-    p { margin: 0 0 1rem; }
-    code { background: var(--vscode-editorWidget-background); padding: 0.15rem 0.3rem; border-radius: 4px; }
-    .chips { display: flex; gap: 8px; align-items: center; margin: 0 0 0.5rem; }
-    .scope-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 0.5rem 0; }
-    .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 999px; border: 1px solid var(--vscode-input-border); background: var(--vscode-editorWidget-background); font-size: 12px; }
-    textarea { width: 100%; box-sizing: border-box; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 6px; padding: 8px; font-family: var(--vscode-editor-font-family); resize: vertical; }
-    button { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: 1px solid var(--vscode-button-border); padding: 8px 12px; border-radius: 6px; cursor: pointer; }
-    button:hover { background: var(--vscode-button-hoverBackground); }
-    .row { display: flex; gap: 10px; align-items: center; justify-content: space-between; }
-    .btn { border: 1px solid var(--vscode-button-border); background: var(--vscode-button-secondaryBackground, var(--vscode-editorWidget-background)); color: var(--vscode-button-foreground); border-radius: 6px; padding: 6px 10px; cursor: pointer; }
-    .btn.primary { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
-    .btn.ghost { background: var(--vscode-editorWidget-background); }
-  </style>
-</head>
-<body>
-  <h1><img src="${this.iconUrl}" alt="ghia-ai" style="width:18px;height:18px;border-radius:4px;"> ghia-ai</h1>
-  <p>Ask a question or select code, then click Send.</p>
-  <div class="scope-row">
-    <button class="btn ghost" id="scope-toggle-inline" aria-pressed="${this.pythonFocus ? "true" : "false"}">
-      ${this.pythonFocus ? "Python focus: On" : "Python focus: Off"}
-    </button>
-    <button class="btn ghost" id="write-toggle" aria-pressed="${this.allowFileWrites ? "true" : "false"}">
-      ${this.allowFileWrites ? "Allow writes: On" : "Allow writes: Off"}
-    </button>
-    <span style="color: var(--vscode-descriptionForeground); font-size: 12px;">Python-heavy answers when on; general answers when off.</span>
-  </div>
-  <form id="ask-form">
-    <div class="chips">
-      <label class="chip"><input type="checkbox" id="include-selection" checked> Selection</label>
-      <label class="chip"><input type="checkbox" id="include-file" checked> Current file</label>
-      <label class="chip">Target file
-        <input list="file-options" type="text" id="target-file" placeholder="e.g. start.py" style="width:200px;" ${this.allowFileWrites ? "" : "disabled"}>
-        <datalist id="file-options">${optionsHtml}</datalist>
-      </label>
-      <label class="chip">Mode
-        <select id="write-mode">
-          <option value="append">Append</option>
-          <option value="replace">Replace</option>
-        </select>
-      </label>
-    </div>
-    <textarea id="ask-input" rows="4" placeholder="How does this function work? What is causing this bug?"></textarea>
-    <div class="row">
-      <span style="color: var(--vscode-descriptionForeground); font-size: 12px;">Answers render here in this wide panel.</span>
-      <button type="submit">Send</button>
-    </div>
-  </form>
-
-  <script>
-    const vscode = acquireVsCodeApi();
-    document.getElementById('scope-toggle-inline')?.addEventListener('click', () => vscode.postMessage({ command: 'toggleScope' }));
-    document.getElementById('write-toggle')?.addEventListener('click', () => vscode.postMessage({ command: 'toggleWritePermission' }));
-    document.getElementById('ask-form').addEventListener('submit', (event) => {
-      event.preventDefault();
-      const text = document.getElementById('ask-input').value;
-      const includeSelection = document.getElementById('include-selection').checked;
-      const includeFile = document.getElementById('include-file').checked;
-      const targetPath = document.getElementById('target-file').value || undefined;
-      const writeMode = document.getElementById('write-mode').value || "append";
-      vscode.postMessage({ command: 'ask', text, includeSelection, includeFile, targetPath, writeMode });
-    });
-  </script>
-</body>
-</html>`;
-  }
-
   private renderChatHtml(showTyping = false): string {
-    const messagesHtml = this.conversation
-      .map((m) => {
-        const cls = m.role === "user" ? "bubble user" : "bubble ai";
-        return `<div class="${cls}">${this.markdownToHtml(m.content)}</div>`;
+    const active = this.getActiveSession();
+    const sessionsHtml = this.sessions
+      .map((session) => {
+        const activeClass = session.id === this.activeSessionId ? "active" : "";
+        const encodedTitle = encodeURIComponent(session.title);
+        return `<div class="session-row ${activeClass}"><button class="session-item" data-session="${session.id}" data-title="${encodedTitle}"><span>${this.escapeHtml(
+          session.title
+        )}</span><small>${session.messages.length}</small></button><button class="session-delete" data-delete-session="${session.id}" aria-label="Delete session">X</button></div>`;
+      })
+      .join("");
+
+    const messagesHtml = active.messages
+      .map((message) => {
+        const who = message.role === "user" ? "You" : "PyAid";
+        const bubbleClass = message.role === "user" ? "user" : "assistant";
+        const pending = message.pending ? " pending" : "";
+        const content = this.markdownToHtml(message.content);
+        const encoded = encodeURIComponent(message.content);
+        return `<article class="msg ${bubbleClass}${pending}"><header><span>${who}</span><time>${new Date(
+          message.timestamp
+        ).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></header><div class="content">${content}</div><footer><button type="button" class="mini" data-copy="${encoded}">Copy</button></footer></article>`;
       })
       .join("");
 
     const typingHtml = showTyping
-      ? `<div class="typing" id="typing-text">🤔 thinking…</div>`
+      ? `<article class="msg assistant pending"><header><span>PyAid</span><time>now</time></header><div class="content"><p>Thinking...</p></div></article>`
       : "";
 
     const optionsHtml = this.fileOptions
@@ -1341,94 +1887,280 @@ export class FloatingPanelProvider implements vscode.Disposable {
       .join("");
 
     return `<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src vscode-webview-resource: https: data:; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
   <style>
-    body { margin:0; padding:16px; font-family: var(--vscode-font-family); background: var(--vscode-editor-background); color: var(--vscode-foreground); }
-    h1 { margin: 0 0 8px; display:flex; gap:8px; align-items:center; }
-    .chat { display:flex; flex-direction:column; gap:10px; margin: 12px 0 16px; }
-    .bubble { padding:10px 12px; border-radius:10px; border:1px solid var(--vscode-panel-border); }
-    .bubble.user { background: var(--vscode-textBlockQuote-background); }
-    .bubble.ai { background: var(--vscode-editorWidget-background); }
-    .typing { font-size: 12px; color: var(--vscode-descriptionForeground); }
-    .composer { display:flex; flex-direction:column; gap:8px; }
-    .chips { display:flex; gap:8px; flex-wrap:wrap; }
-    .chip { display:inline-flex; gap:6px; align-items:center; padding:4px 8px; border-radius:999px; border:1px solid var(--vscode-input-border); background: var(--vscode-editorWidget-background); font-size:12px; }
-    .scope-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
-    .write-row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; align-items:center; }
-    textarea { width:100%; box-sizing:border-box; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border:1px solid var(--vscode-input-border); border-radius:6px; padding:8px; font-family: var(--vscode-editor-font-family); }
-    button { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border:1px solid var(--vscode-button-border); padding:8px 12px; border-radius:6px; cursor:pointer; }
-    button:hover { background: var(--vscode-button-hoverBackground); }
-    .actions { display:flex; gap:8px; align-items:center; }
-    datalist option { color: var(--vscode-foreground); }
+    :root {
+      --bg: #0f1318;
+      --panel: #151b22;
+      --panel-2: #1b2430;
+      --border: #2b3a4d;
+      --text: #e6edf3;
+      --muted: #98a6b8;
+      --accent: #3fb950;
+      --user: #113a5f;
+      --assistant: #18222d;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: "Segoe UI", "SF Pro Text", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(120% 120% at 5% 0%, #1b2a3a 0%, transparent 42%),
+        radial-gradient(120% 120% at 95% 100%, #123329 0%, transparent 46%),
+        var(--bg);
+    }
+    .layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); height: 100%; }
+    .rail {
+      border-right: 1px solid var(--border);
+      background: color-mix(in srgb, var(--panel) 90%, #0a0d11);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow: auto;
+    }
+    .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; letter-spacing: 0.2px; }
+    .brand img { width: 18px; height: 18px; border-radius: 4px; }
+    .rail-actions { display: flex; gap: 6px; }
+    .session-list { display: flex; flex-direction: column; gap: 6px; }
+    .session-row { display: flex; align-items: center; gap: 6px; }
+    .session-row.active .session-item { border-color: var(--accent); background: color-mix(in srgb, var(--panel) 80%, var(--accent) 20%); }
+    .session-item {
+      flex: 1; text-align: left; border: 1px solid var(--border); background: var(--panel);
+      color: var(--text); border-radius: 10px; padding: 8px 10px; cursor: pointer;
+      display: flex; justify-content: space-between; align-items: center;
+      min-width: 0;
+    }
+    .session-item small { color: var(--muted); }
+    .session-delete {
+      width: 28px; min-width: 28px; height: 28px; padding: 0;
+      border-radius: 8px; border: 1px solid var(--border);
+      background: #22161a; color: #f5c2c7; font-weight: 700;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .session-delete:hover { border-color: #e5534b; color: #ff938a; }
+    .main { display: grid; grid-template-rows: auto 1fr auto; min-height: 0; }
+    .topbar {
+      border-bottom: 1px solid var(--border);
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: color-mix(in srgb, var(--panel-2) 90%, #0c1016);
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .top-left { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .chip { border: 1px solid var(--border); color: var(--muted); border-radius: 999px; padding: 3px 8px; font-size: 12px; }
+    .chat { padding: 18px; overflow: auto; display: flex; flex-direction: column; gap: 12px; min-height: 0; scroll-behavior: smooth; overscroll-behavior: contain; }
+    .msg {
+      max-width: min(860px, 92%);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 10px 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    }
+    .msg.user { margin-left: auto; background: var(--user); }
+    .msg.assistant { margin-right: auto; background: var(--assistant); }
+    .msg.pending { opacity: 0.85; }
+    .msg header { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+    .msg .content { white-space: pre-wrap; word-break: break-word; }
+    .msg footer { margin-top: 8px; display: flex; justify-content: flex-end; }
+    .code-block { border: 1px solid var(--border); border-radius: 10px; background: #0f1720; padding: 10px; overflow: auto; }
+    .composer {
+      border-top: 1px solid var(--border);
+      background: color-mix(in srgb, var(--panel-2) 86%, #0c1016);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    textarea {
+      width: 100%; min-height: 84px; resize: vertical;
+      border: 1px solid var(--border); background: #0f1720; color: var(--text);
+      border-radius: 10px; padding: 10px; font-family: "JetBrains Mono", "SF Mono", monospace;
+    }
+    button {
+      border: 1px solid var(--border);
+      background: #101923;
+      color: var(--text);
+      border-radius: 9px;
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+    button:hover { border-color: var(--accent); }
+    button.primary { background: #175227; border-color: #2b8a3e; }
+    button.mini { padding: 4px 8px; font-size: 12px; }
+    .muted { color: var(--muted); font-size: 12px; }
+    .empty { color: var(--muted); border: 1px dashed var(--border); border-radius: 12px; padding: 16px; }
+    .write-controls { display: ${this.allowFileWrites ? "flex" : "none"}; }
+    input, select {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px;
+      background: #0f1720;
+      color: var(--text);
+    }
+    @media (max-width: 980px) {
+      .layout { grid-template-columns: 1fr; }
+      .rail { border-right: 0; border-bottom: 1px solid var(--border); }
+    }
   </style>
 </head>
 <body>
-  <h1>🧠 ghia-ai</h1>
-  <div class="chat" id="chat">${messagesHtml}${typingHtml}</div>
-  <form id="ask-form" class="composer">
-    <div class="scope-row">
-      <button class="btn ghost" id="scope-toggle-inline" aria-pressed="${this.pythonFocus ? "true" : "false"}">
-        ${this.pythonFocus ? "Python focus: On" : "Python focus: Off"}
-      </button>
-      <button class="btn ghost" id="write-toggle" aria-pressed="${this.allowFileWrites ? "true" : "false"}">
-        ${this.allowFileWrites ? "Allow writes: On" : "Allow writes: Off"}
-      </button>
-      <span style="color: var(--vscode-descriptionForeground); font-size: 12px;">Python-heavy answers when on; general answers when off.</span>
-    </div>
-    <div class="chips">
-      <label class="chip"><input type="checkbox" id="include-selection" checked> Selection</label>
-      <label class="chip"><input type="checkbox" id="include-file" checked> Current file</label>
-    </div>
-    <div class="write-row">
-      <label class="chip">Target file
-        <input list="file-options" type="text" id="target-file" placeholder="start.py" style="width:200px;" ${this.allowFileWrites ? "" : "disabled"}>
-        <datalist id="file-options">${optionsHtml}</datalist>
-      </label>
-      <label class="chip">Mode
-        <select id="write-mode" ${this.allowFileWrites ? "" : "disabled"}>
-          <option value="append">Append</option>
-          <option value="replace">Replace</option>
-        </select>
-      </label>
-      <span style="color: var(--vscode-descriptionForeground); font-size: 12px;">Enabled when writes are allowed.</span>
-    </div>
-    <textarea id="ask-input" rows="3" placeholder="Ask a follow-up or a new question"></textarea>
-    <div class="actions">
-      <button type="submit">Send</button>
-      <button type="button" id="clear-btn">Clear</button>
-    </div>
-  </form>
+  <div class="layout">
+    <aside class="rail">
+      <div class="brand"><img src="${this.iconUrl}" alt="PyAid">PyAid</div>
+      <div class="rail-actions">
+        <input type="text" id="session-title" placeholder="Session name" value="${this.escapeHtml(active.title)}" style="flex:1; min-width: 0;">
+        <button type="button" id="new-session">New</button>
+        <button type="button" id="rename-session">Rename</button>
+      </div>
+      <div class="session-list">${sessionsHtml}</div>
+      <div class="muted">Sessions are persisted across VS Code reloads.</div>
+    </aside>
+
+    <section class="main">
+      <div class="topbar">
+        <div class="top-left">
+          <span class="chip">${this.escapeHtml(active.title)}</span>
+          <button type="button" id="scope-toggle">${
+            this.pythonFocus ? "Python Focus: On" : "Python Focus: Off"
+          }</button>
+          <button type="button" id="write-toggle">${
+            this.allowFileWrites ? "Writes: On" : "Writes: Off"
+          }</button>
+          <button type="button" id="explain-selection">Explain Selection</button>
+        </div>
+        <button type="button" id="clear-session">Clear Session</button>
+      </div>
+
+      <div class="chat" id="chat">
+        ${messagesHtml || '<div class="empty">Start a conversation. Ask a Python question, debugging task, or architecture question.</div>'}
+        ${typingHtml}
+      </div>
+
+      <form id="ask-form" class="composer">
+        <div class="row write-controls" id="write-controls">
+          <label class="muted">Target file</label>
+          <input list="file-options" type="text" id="target-file" placeholder="e.g. src/main.py" style="min-width:220px;" ${
+            this.allowFileWrites ? "" : "disabled"
+          }>
+          <datalist id="file-options">${optionsHtml}</datalist>
+          <label class="muted">Mode</label>
+          <select id="write-mode" ${this.allowFileWrites ? "" : "disabled"}>
+            <option value="append">Append</option>
+            <option value="replace">Replace</option>
+            <option value="remove">Remove PyAid blocks</option>
+          </select>
+        </div>
+        <textarea id="ask-input" placeholder="Ask PyAid about Python, debugging, refactors, tests, or design decisions..."></textarea>
+        <div class="row">
+          <button type="submit" class="primary">Send</button>
+          <span class="muted">Context includes active selection and current file when available.</span>
+        </div>
+      </form>
+    </section>
+  </div>
 
   <script>
     const vscode = acquireVsCodeApi();
-    const thinkingEmojis = ["🤔", "🌀", "💭", "✨", "⌛"];
-    let emojiIndex = 0;
-    document.getElementById('scope-toggle-inline')?.addEventListener('click', () => vscode.postMessage({ command: 'toggleScope' }));
-    document.getElementById('write-toggle')?.addEventListener('click', () => vscode.postMessage({ command: 'toggleWritePermission' }));
-    const form = document.getElementById('ask-form');
-    form.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const text = document.getElementById('ask-input').value;
-      const includeSelection = document.getElementById('include-selection').checked;
-      const includeFile = document.getElementById('include-file').checked;
-      const targetPath = document.getElementById('target-file').value || undefined;
-      const writeMode = document.getElementById('write-mode').value || "append";
-      vscode.postMessage({ command: 'ask', text, includeSelection, includeFile, targetPath, writeMode });
-      document.getElementById('ask-input').value = '';
-    });
-    document.getElementById('clear-btn').addEventListener('click', () => {
-      vscode.postMessage({ command: 'clear' });
+    const activeSessionId = ${JSON.stringify(this.activeSessionId)};
+    const activeSessionTitle = ${JSON.stringify(active.title)};
+
+    const chatEl = document.getElementById('chat');
+    const scrollChatToBottom = () => {
+      if (!chatEl) return;
+      chatEl.scrollTop = chatEl.scrollHeight;
+    };
+
+    requestAnimationFrame(() => scrollChatToBottom());
+    window.addEventListener('load', scrollChatToBottom);
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(() => scrollChatToBottom());
+    }
+
+    document.querySelectorAll('[data-session]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-session');
+        if (id) vscode.postMessage({ command: 'switchSession', id });
+      });
     });
 
-    // Animate typing placeholder with rotating emojis while thinking
-    const typingEl = document.getElementById('typing-text');
-    if (typingEl) {
-      setInterval(() => {
-        emojiIndex = (emojiIndex + 1) % thinkingEmojis.length;
-        typingEl.textContent = thinkingEmojis[emojiIndex] + ' thinking…';
-      }, 800);
-    }
+    document.querySelectorAll('[data-delete-session]').forEach((btn) => {
+      btn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const id = btn.getAttribute('data-delete-session');
+        if (id) vscode.postMessage({ command: 'deleteSession', id });
+      });
+    });
+
+    const sessionTitleInput = document.getElementById('session-title');
+
+    document.getElementById('new-session')?.addEventListener('click', () => {
+      const title = sessionTitleInput?.value?.trim();
+      vscode.postMessage({
+        command: 'newSession',
+        title: title && title.length > 0 ? title : undefined,
+      });
+      if (sessionTitleInput) sessionTitleInput.value = '';
+    });
+
+    document.getElementById('rename-session')?.addEventListener('click', () => {
+      if (!activeSessionId) return;
+      const title = sessionTitleInput?.value?.trim() || '';
+      if (!title) return;
+      vscode.postMessage({ command: 'renameSession', id: activeSessionId, title });
+    });
+
+    document.getElementById('clear-session')?.addEventListener('click', () => {
+      vscode.postMessage({ command: 'clearSession' });
+    });
+
+    document.getElementById('scope-toggle')?.addEventListener('click', () => {
+      vscode.postMessage({ command: 'toggleScope' });
+    });
+
+    document.getElementById('write-toggle')?.addEventListener('click', () => {
+      vscode.postMessage({ command: 'toggleWritePermission' });
+    });
+
+    document.getElementById('explain-selection')?.addEventListener('click', () => {
+      vscode.postMessage({ command: 'explainSelection' });
+    });
+
+    document.querySelectorAll('[data-copy]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const value = btn.getAttribute('data-copy') || '';
+        vscode.postMessage({ command: 'copy', text: decodeURIComponent(value) });
+      });
+    });
+
+    const form = document.getElementById('ask-form');
+    form?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const input = document.getElementById('ask-input');
+      const text = input.value || '';
+      if (!text.trim()) return;
+      const targetInput = document.getElementById('target-file');
+      const modeSelect = document.getElementById('write-mode');
+      vscode.postMessage({
+        command: 'ask',
+        text,
+        includeSelection: true,
+        includeFile: true,
+        targetPath: targetInput ? targetInput.value || undefined : undefined,
+        writeMode: modeSelect ? modeSelect.value || 'append' : 'append'
+      });
+      input.value = '';
+    });
   </script>
 </body>
 </html>`;
@@ -1436,10 +2168,16 @@ export class FloatingPanelProvider implements vscode.Disposable {
 
   private async handleAsk(
     question: string,
-    opts: { includeSelection: boolean; includeFile: boolean }
+    opts: {
+      includeSelection: boolean;
+      includeFile: boolean;
+      targetPath?: string;
+      writeMode?: WriteMode;
+    }
   ): Promise<void> {
-    if (!question || !question.trim()) {
-      vscode.window.showWarningMessage("Enter a question to ask ghia-ai.");
+    const trimmed = question?.trim();
+    if (!trimmed) {
+      void vscode.window.showWarningMessage("Enter a question to ask PyAid.");
       return;
     }
 
@@ -1451,11 +2189,10 @@ export class FloatingPanelProvider implements vscode.Disposable {
         ? editor.document.getText(editor.selection).trim()
         : "";
 
-    const includeFile = opts.includeFile && doc;
     const contextInfo =
-      includeFile && doc
+      opts.includeFile && doc
         ? (() => {
-            const MAX_CHARS = 30000;
+            const MAX_CHARS = 30_000;
             const full = doc.getText();
             const truncated = full.length > MAX_CHARS;
             return {
@@ -1468,16 +2205,30 @@ export class FloatingPanelProvider implements vscode.Disposable {
 
     const augmentedQuestion =
       selectionText.length > 0
-        ? `${question.trim()}\n\nSelected code:\n${selectionText}`
-        : question.trim();
+        ? `${trimmed}\n\nSelected code:\n${selectionText}`
+        : trimmed;
 
     if (!this.panel) {
       this.ensurePanel();
     }
 
-    // Append user message and a typing placeholder
-    this.conversation.push({ role: "user", content: augmentedQuestion });
-    this.conversation.push({ role: "assistant", content: "…thinking" });
+    const userEntry: FloatingConversationEntry = {
+      id: this.generateId(),
+      role: "user",
+      content: trimmed,
+      timestamp: Date.now(),
+    };
+    const placeholder: FloatingConversationEntry = {
+      id: this.generateId(),
+      role: "assistant",
+      content: "Thinking...",
+      timestamp: Date.now(),
+      pending: true,
+    };
+
+    this.updateSessionMessages((messages) => {
+      messages.push(userEntry, placeholder);
+    });
     this.panel!.webview.html = this.renderChatHtml(true);
 
     try {
@@ -1488,27 +2239,32 @@ export class FloatingPanelProvider implements vscode.Disposable {
         undefined,
         this.pythonFocus
       );
-      // replace placeholder
-      if (
-        this.conversation.length > 0 &&
-        this.conversation[this.conversation.length - 1].role === "assistant" &&
-        this.conversation[this.conversation.length - 1].content.startsWith("…")
-      ) {
-        this.conversation.pop();
-      }
-      this.conversation.push({ role: "assistant", content: answer });
+
+      await this.maybeWriteAnswer(answer, opts);
+
+      this.updateSessionMessages((messages) => {
+        const idx = messages.findIndex((m) => m.id === placeholder.id);
+        if (idx >= 0) {
+          messages[idx] = {
+            ...placeholder,
+            content: answer,
+            pending: false,
+            timestamp: Date.now(),
+          };
+        }
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      if (
-        this.conversation.length > 0 &&
-        this.conversation[this.conversation.length - 1].role === "assistant" &&
-        this.conversation[this.conversation.length - 1].content.startsWith("…")
-      ) {
-        this.conversation.pop();
-      }
-      this.conversation.push({
-        role: "assistant",
-        content: `Error: ${message}`,
+      this.updateSessionMessages((messages) => {
+        const idx = messages.findIndex((m) => m.id === placeholder.id);
+        if (idx >= 0) {
+          messages[idx] = {
+            ...placeholder,
+            content: `Error: ${message}`,
+            pending: false,
+            timestamp: Date.now(),
+          };
+        }
       });
     }
 
@@ -1516,179 +2272,179 @@ export class FloatingPanelProvider implements vscode.Disposable {
   }
 
   private buildHistoryContext(): string {
-    const recent = this.conversation.slice(-6);
+    const active = this.getActiveSession();
+    const recent = active.messages.filter((m) => !m.pending).slice(-8);
     const lines = recent.map(
       (m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`
     );
     return lines.length ? `Previous conversation:\n${lines.join("\n")}\n` : "";
   }
 
-  private randomEmoji(): string {
-    const emojis = ["🤖", "✨", "⚡", "🧠", "🚀", "💡", "🌀", "🎯", "📚", "🧩"];
-    return emojis[Math.floor(Math.random() * emojis.length)];
+  private extractCodeSnippet(answer: string): string | null {
+    const fenced =
+      answer.match(/```(?:[^\n`]*)\n([\s\S]*?)```/) ??
+      answer.match(/```([\s\S]*?)```/);
+    if (fenced && fenced[1]) return fenced[1].trim();
+
+    const inline = answer.match(/`([^`]+)`/);
+    if (inline && inline[1]) return inline[1].trim();
+
+    return null;
   }
 
-  private getLoadingHtml(code: string): string {
-    return `<!DOCTYPE html>
-<html>
-<head>
-  <style>
-    body {
-      font-family: var(--vscode-font-family);
-      padding: 20px;
-      color: var(--vscode-foreground);
-      background: var(--vscode-editor-background);
-    }
-    .loading {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin: 20px 0;
-    }
-    .spinner {
-      width: 20px;
-      height: 20px;
-      border: 2px solid var(--vscode-progressBar-background);
-      border-top: 2px solid var(--vscode-textLink-foreground);
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-    .code-preview {
-      background: var(--vscode-textBlockQuote-background);
-      padding: 12px;
-      border-radius: 4px;
-      font-family: var(--vscode-editor-font-family);
-      font-size: 12px;
-      overflow-x: auto;
-      white-space: pre;
-    }
-  </style>
-</head>
-<body>
-  <h2>🧠 ghia-ai</h2>
-  <div class="loading">
-    <div class="spinner"></div>
-    <span id="loading-text">Generating explanation...</span>
-  </div>
-  <h3>Code</h3>
-  <pre class="code-preview">${this.escapeHtml(code)}</pre>
+  private resolveTargetPath(provided?: string): string | undefined {
+    const editor = vscode.window.activeTextEditor;
+    const workspaceFolders = vscode.workspace.workspaceFolders;
 
-  <script>
-    const emojis = ["🤖","✨","⚡","🧠","🚀","💡","🌀","🎯","📚","🧩"];
-    const textEl = document.getElementById('loading-text');
-    let i = 0;
-    setInterval(() => {
-      textEl.textContent = "Generating " + emojis[i % emojis.length];
-      i++;
-    }, 600);
-  </script>
-</body>
-</html>`;
+    if (provided && provided.trim().length > 0) {
+      const p = provided.trim();
+      if (path.isAbsolute(p)) return p;
+      if (workspaceFolders && workspaceFolders.length > 0) {
+        return path.join(workspaceFolders[0].uri.fsPath, p);
+      }
+      if (editor) {
+        return path.join(path.dirname(editor.document.uri.fsPath), p);
+      }
+      return path.resolve(p);
+    }
+
+    if (editor) {
+      return editor.document.uri.fsPath;
+    }
+    return undefined;
   }
 
-  private getResultHtml(
-    code: string,
-    explanation: string,
-    languageId: string
-  ): string {
-    // Pre-render markdown to clean HTML
-    const rendered = this.markdownToHtml(explanation);
-    const rawExplanationJson = JSON.stringify(explanation);
+  private async writeSnippetToEditor(
+    snippet: string,
+    mode: WriteMode
+  ): Promise<boolean> {
+    if (mode === "remove") return false;
+    const editor = vscode.window.activeTextEditor;
+    const doc = editor?.document;
+    if (!editor || !doc) return false;
 
-    return `<!DOCTYPE html>
-<html>
-<head>
-  <style>
-    body {
-      font-family: var(--vscode-font-family);
-      padding: 20px;
-      color: var(--vscode-foreground);
-      background: var(--vscode-editor-background);
-      line-height: 1.6;
+    const edit = new vscode.WorkspaceEdit();
+    const uri = doc.uri;
+
+    if (mode === "replace") {
+      if (editor.selection && !editor.selection.isEmpty) {
+        edit.replace(uri, editor.selection, snippet);
+      } else {
+        const lastLine = doc.lineCount - 1;
+        const fullRange = new vscode.Range(
+          new vscode.Position(0, 0),
+          new vscode.Position(
+            lastLine,
+            doc.lineAt(Math.max(lastLine, 0)).text.length
+          )
+        );
+        edit.replace(uri, fullRange, snippet);
+      }
+    } else {
+      const insertPos =
+        editor.selection?.end ??
+        new vscode.Position(
+          doc.lineCount,
+          doc.lineAt(Math.max(doc.lineCount - 1, 0)).text.length
+        );
+      const toInsert = snippet.endsWith("\n") ? snippet : snippet + "\n";
+      edit.insert(uri, insertPos, toInsert);
     }
-    h2 {
-      margin-top: 0;
-      display: flex;
-      align-items: center;
-      gap: 8px;
+
+    const applied = await vscode.workspace.applyEdit(edit);
+    if (applied) {
+      await doc.save().catch(() => {
+        /* ignore */
+      });
+      void vscode.window.showInformationMessage("PyAid wrote to editor");
+      return true;
     }
-    .explanation {
-      background: var(--vscode-textBlockQuote-background);
-      border-left: 3px solid var(--vscode-textLink-foreground);
-      padding: 16px;
-      margin: 16px 0;
-      border-radius: 0 4px 4px 0;
+    return false;
+  }
+
+  private commentPrefix(filePath: string): string {
+    const ext = path.extname(filePath).toLowerCase();
+    if ([".py", ".sh", ".rb", ".pl"].includes(ext)) return "#";
+    if (
+      [
+        ".ts",
+        ".tsx",
+        ".js",
+        ".jsx",
+        ".cjs",
+        ".mjs",
+        ".java",
+        ".go",
+        ".c",
+        ".cc",
+        ".cpp",
+        ".h",
+        ".hpp",
+      ].includes(ext)
+    )
+      return "//";
+    return "//";
+  }
+
+  private wrapWithMarkers(snippet: string, targetPath: string): string {
+    const prefix = this.commentPrefix(targetPath);
+    const start = `${prefix} PyAid:start`;
+    const end = `${prefix} PyAid:end`;
+    const body = snippet.trimEnd();
+    return `${start}\n${body}\n${end}\n`;
+  }
+
+  private async maybeWriteAnswer(
+    answer: string,
+    options: { targetPath?: string; writeMode?: WriteMode }
+  ): Promise<void> {
+    if (!this.allowFileWrites) return;
+    const mode = options.writeMode ?? "append";
+    const targetPath = this.resolveTargetPath(options.targetPath);
+    const snippet =
+      mode === "remove" ? "" : this.extractCodeSnippet(answer) ?? answer;
+
+    if (mode === "remove") {
+      if (!targetPath) {
+        void vscode.window.showWarningMessage(
+          "PyAid: Choose a target file to remove PyAid code from."
+        );
+        return;
+      }
+      await removePyAidBlocks(targetPath).catch((err) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        vscode.window.showErrorMessage(`PyAid remove failed: ${msg}`);
+      });
+      return;
     }
-    .explanation h2, .explanation h3, .explanation h4 { margin: 0.5em 0 0.25em; }
-    .explanation p { margin: 0 0 0.6em; }
-    .code-block {
-      background: var(--vscode-editor-background);
-      border: 1px solid var(--vscode-panel-border);
-      padding: 10px;
-      border-radius: 6px;
-      font-family: var(--vscode-editor-font-family);
-      font-size: 12px;
-      overflow-x: auto;
-      white-space: pre;
-      margin: 10px 0;
+
+    if (!snippet || snippet.trim().length === 0) {
+      void vscode.window.showWarningMessage("PyAid: No code block found to write.");
+      return;
     }
-    .code-preview {
-      background: var(--vscode-editor-background);
-      border: 1px solid var(--vscode-panel-border);
-      padding: 12px;
-      border-radius: 4px;
-      font-family: var(--vscode-editor-font-family);
-      font-size: 12px;
-      overflow-x: auto;
-      white-space: pre;
-      max-height: 200px;
-      overflow-y: auto;
+
+    const payload = targetPath
+      ? this.wrapWithMarkers(snippet, targetPath)
+      : snippet;
+
+    if (targetPath) {
+      if (mode === "replace") {
+        await removePyAidBlocks(targetPath).catch(() => {});
+      }
+      const finalPayload =
+        mode === "append"
+          ? payload.endsWith("\n")
+            ? payload
+            : payload + "\n"
+          : payload;
+      await writeWithConsent(targetPath, finalPayload, mode, true).catch((err) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        vscode.window.showErrorMessage(`PyAid write failed: ${msg}`);
+      });
+      return;
     }
-    .btn {
-      background: var(--vscode-button-background);
-      color: var(--vscode-button-foreground);
-      border: none;
-      padding: 8px 16px;
-      border-radius: 4px;
-      cursor: pointer;
-      margin-right: 8px;
-    }
-    .btn:hover {
-      background: var(--vscode-button-hoverBackground);
-    }
-    .meta {
-      font-size: 12px;
-      color: var(--vscode-descriptionForeground);
-      margin-top: 16px;
-    }
-  </style>
-</head>
-<body>
-  <h2>🧠 ghia-ai</h2>
-  
-  <div class="explanation" id="explanation">${rendered}</div>
-  
-  <button class="btn" onclick="copyExplanation()">📋 Copy Explanation</button>
-  
-  <h3>Code</h3>
-  <pre class="code-preview">${this.escapeHtml(code)}</pre>
-  
-  <p class="meta">Language: ${languageId}</p>
-  
-  <script>
-    const vscode = acquireVsCodeApi();
-    const rawExplanation = ${rawExplanationJson};
-    
-    function copyExplanation() {
-      vscode.postMessage({ command: 'copy', text: rawExplanation });
-    }
-  </script>
-</body>
-</html>`;
+
+    await this.writeSnippetToEditor(snippet, mode);
   }
 
   private escapeHtml(text: string): string {
@@ -1702,7 +2458,6 @@ export class FloatingPanelProvider implements vscode.Disposable {
 
   private markdownToHtml(md: string): string {
     const codeBlocks: string[] = [];
-    // Extract code blocks first
     md = md.replace(/```([\s\S]*?)```/g, (_m, code) => {
       const idx = codeBlocks.push(
         `<pre class="code-block"><code>${this.escapeHtml(
@@ -1713,32 +2468,25 @@ export class FloatingPanelProvider implements vscode.Disposable {
     });
 
     let html = this.escapeHtml(md);
-
-    // Headings
     html = html.replace(/^###\s+(.*)$/gm, "<h3>$1</h3>");
     html = html.replace(/^##\s+(.*)$/gm, "<h2>$1</h2>");
     html = html.replace(/^#\s+(.*)$/gm, "<h1>$1</h1>");
-    // Bold / italic
     html = html.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
     html = html.replace(/\*(.*?)\*/g, "<em>$1</em>");
-    // Lists (simple bullet)
     html = html.replace(/^\*\s+(.*)$/gm, "<ul><li>$1</li></ul>");
-    // Paragraph breaks
     html = html.replace(/\n{2,}/g, "</p><p>");
     html = `<p>${html}</p>`;
-
-    // Reinsert code blocks
-    html = html.replace(/__CODE_BLOCK_(\d+)__/g, (_m, i) => codeBlocks[Number(i)] ?? "");
+    html = html.replace(
+      /__CODE_BLOCK_(\d+)__/g,
+      (_m, i) => codeBlocks[Number(i)] ?? ""
+    );
     return html;
   }
 
-  /**
-   * Toggles Python-focused answers for free-form questions in floating panel.
-   */
   private async toggleScope(): Promise<void> {
     this.pythonFocus = !this.pythonFocus;
     await vscode.workspace
-      .getConfiguration("ghiaAI")
+      .getConfiguration("pyaid")
       .update("askPythonMode", this.pythonFocus, vscode.ConfigurationTarget.Global);
     if (this.panel) {
       this.panel.webview.html = this.renderChatHtml();

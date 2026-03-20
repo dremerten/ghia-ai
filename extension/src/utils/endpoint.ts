@@ -3,7 +3,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 
 /**
- * Reads an Ollama endpoint from a `.ghia-ai-endpoint` file if present.
+ * Reads an Ollama endpoint from a `.pyaid-endpoint` file if present.
  * Returns the first non-empty trimmed line, or null when not found.
  */
 export function readEndpointFromFile(): string | null {
@@ -12,14 +12,14 @@ export function readEndpointFromFile(): string | null {
   // 1) Workspace roots (supports multi-root, prefer the first)
   const folders = vscode.workspace.workspaceFolders || [];
   for (const folder of folders) {
-    candidatePaths.push(path.join(folder.uri.fsPath, ".ghia-ai-endpoint"));
+    candidatePaths.push(path.join(folder.uri.fsPath, ".pyaid-endpoint"));
   }
 
   // 2) Extension folder when opened directly
-  candidatePaths.push(path.join(__dirname, "..", ".ghia-ai-endpoint"));
+  candidatePaths.push(path.join(__dirname, "..", ".pyaid-endpoint"));
 
   // 3) Repository root when workspace root is the extension subfolder
-  candidatePaths.push(path.join(__dirname, "..", "..", ".ghia-ai-endpoint"));
+  candidatePaths.push(path.join(__dirname, "..", "..", ".pyaid-endpoint"));
 
   for (const candidate of candidatePaths) {
     try {

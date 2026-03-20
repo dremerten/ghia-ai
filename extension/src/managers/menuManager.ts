@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { StateManager } from "./stateManager";
 import { readEndpointFromFile } from "../utils/endpoint";
 
-const CONFIG_NS = "ghiaAI";
+const CONFIG_NS = "PyAid";
 const ACTION_PREFIX = "action:";
 
 const DEFAULT_MODEL = "llama3";
@@ -35,7 +35,7 @@ export class MenuManager {
     this.configWatcherDisposable = vscode.workspace.onDidChangeConfiguration(
       (e) => {
         if (
-          e.affectsConfiguration("ghiaAI") &&
+          e.affectsConfiguration("PyAid") &&
           this.quickPick &&
           (this.quickPick as { visible?: boolean }).visible
         ) {
@@ -99,8 +99,8 @@ export class MenuManager {
   private buildItems(): ActionableQuickPickItem[] {
     const enabled = this.stateManager.getEnabled();
     const toggleLabel = enabled
-      ? "$(check) ghia-ai enabled"
-      : "ghia-ai disabled";
+      ? "$(check) PyAid enabled"
+      : "PyAid disabled";
     const toggleDescription = enabled
       ? "Click to disable hover explanations"
       : "Click to enable hover explanations";
@@ -210,7 +210,7 @@ export class MenuManager {
   showMainMenu(): void {
     if (!this.quickPick) {
       this.quickPick = vscode.window.createQuickPick<ActionableQuickPickItem>();
-      this.quickPick.title = "ghia-ai";
+      this.quickPick.title = "PyAid";
       this.quickPick.placeholder = "Choose an action (multiple allowed)";
       this.quickPick.matchOnDescription = true;
       this.quickPick.canSelectMany = true;

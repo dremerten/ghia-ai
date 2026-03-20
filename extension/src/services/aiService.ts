@@ -49,7 +49,7 @@ export class AIService {
     : (undiciFetch as unknown as typeof fetch);
 
   private getConfig(): AIConfig {
-    const config = vscode.workspace.getConfiguration("ghiaAI");
+    const config = vscode.workspace.getConfiguration("pyaid");
     const inspect = config.inspect<string>("ollamaEndpoint");
     const hasUserEndpoint = Boolean(
       inspect?.globalValue ?? inspect?.workspaceValue ?? inspect?.workspaceFolderValue
@@ -75,7 +75,7 @@ export class AIService {
     return {
       model,
       // Default to the local Ollama instance, which is the expected setup for the
-      // extension. Users can override via `ghiaAI.ollamaEndpoint` in settings.
+      // extension. Users can override via `pyaid.ollamaEndpoint` in settings.
       ollamaEndpoint: resolvedEndpoint,
     };
   }
@@ -146,7 +146,7 @@ export class AIService {
         return "Request was cancelled.";
       }
       const message = `${this.analyzeError(err)} (model tried: ${model}, endpoint: ${this.maskEndpoint(cfg.ollamaEndpoint)})`;
-      console.error("[ghia-ai]", err);
+      console.error("[PyAid]", err);
       throw new Error(message);
     }
   }
@@ -367,7 +367,7 @@ export class AIService {
       if (status === 404) {
         const match = /model ['"]?([^'"]+)['"]? not found/i.exec(message);
         const modelName = match?.[1] ?? "the configured model";
-        return `Model "${modelName}" is not available on your Ollama instance. Run: ollama pull ${modelName}, or set "ghiaAI.model" to a model you have.`;
+        return `Model "${modelName}" is not available on your Ollama instance. Run: ollama pull ${modelName}, or set "pyaid.model" to a model you have.`;
       }
       if (status === 401 || status === 403) {
         return "Authentication failed (401/403). Check your Ollama instance configuration.";
@@ -390,7 +390,7 @@ export class AIService {
       ) ||
       (error instanceof TypeError && msgLower.includes("fetch"))
     ) {
-      return "Could not reach Ollama. Ensure it is running locally and `ghiaAI.ollamaEndpoint` is correct.";
+      return "Could not reach Ollama. Ensure it is running locally and `pyaid.ollamaEndpoint` is correct.";
     }
     if (/timeout|etimedout|timed out/i.test(msgLower)) {
       return "The request timed out. Check your network or try again.";

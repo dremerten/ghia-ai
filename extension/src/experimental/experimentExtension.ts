@@ -208,7 +208,7 @@ export function activateExperiments(context: vscode.ExtensionContext): void {
     vscode.StatusBarAlignment.Left,
     100
   );
-  statusBarItem.command = "ghia-ai.experiment.menu";
+  statusBarItem.command = "pyaid.experiment.menu";
   updateStatusBar();
   statusBarItem.show();
   context.subscriptions.push(statusBarItem);

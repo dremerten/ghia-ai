@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 
-const STATE_KEY = "ghia-ai.state";
+const STATE_KEY = "pyaid.state";
 const DEBOUNCE_MS = 500;
 
 interface ExtensionState {

@@ -1,8 +1,8 @@
 {
-  "name": "ghia-ai",
-  "displayName": "ghia-ai",
+  "name": "pyaid",
+  "displayName": "PyAid",
   "version": "1.0.0",
-  "description": "Clarify confusing code with AI-powered explanations. Click, read, understand—no more head-scratching over cryptic functions.",
+  "description": "AI-powered Python guidance at your fingertips",
   "publisher": "andremerten",
   "license": "MIT",
   "engines": {
@@ -11,13 +11,13 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/andremerten/ghia-ai.git"
+    "url": "https://github.com/andremerten/pyaid.git"
   },
   "bugs": {
-    "url": "https://github.com/andremerten/ghia-ai/issues"
+    "url": "https://github.com/andremerten/pyaid/issues"
   },
-  "homepage": "https://github.com/andremerten/ghia-ai#readme",
-  "icon": "icon.png",
+  "homepage": "https://github.com/andremerten/pyaid#readme",
+  "icon": "media/pyaid.png",
   "activationEvents": [
     "onStartupFinished"
   ],
@@ -36,7 +36,7 @@
     "validate": "node validate.js"
   },
   "dependencies": {
-    "@ghia-ai/shared": "file:../shared",
+    "@pyaid/shared": "file:../shared",
     "ai": "^6.0.116",
     "undici": "^7.24.4"
   },
@@ -51,160 +51,160 @@
   "contributes": {
     "commands": [
       {
-        "command": "ghia-ai.explainCode",
-        "title": "ghia-ai: Explain Selected Code"
+        "command": "pyaid.explainCode",
+        "title": "pyaid: Explain Selected Code"
       },
       {
-        "command": "ghia-ai.writeToFile",
-        "title": "ghia-ai: Write To File",
-        "category": "ghia-ai"
+        "command": "pyaid.writeToFile",
+        "title": "pyaid: Write To File",
+        "category": "pyaid"
       },
       {
-        "command": "ghia-ai.retryHoverExplanation",
-        "title": "ghia-ai: Retry Hover Explanation"
+        "command": "pyaid.retryHoverExplanation",
+        "title": "pyaid: Retry Hover Explanation"
       },
       {
-        "command": "ghia-ai.statusBarClick",
-        "title": "ghia-ai: Show Menu"
+        "command": "pyaid.statusBarClick",
+        "title": "pyaid: Show Menu"
       },
       {
-        "command": "ghia-ai.openPanel",
-        "title": "ghia-ai: Open Side Panel"
+        "command": "pyaid.openPanel",
+        "title": "pyaid: Open Side Panel"
       },
       {
-        "command": "ghia-ai.prototype.selectMode",
-        "title": "ghia-ai: Select UI Mode"
+        "command": "pyaid.prototype.selectMode",
+        "title": "pyaid: Select UI Mode"
       },
       {
-        "command": "ghia-ai.quickPeek",
-        "title": "ghia-ai: Quick Peek Explanation"
+        "command": "pyaid.quickPeek",
+        "title": "pyaid: Quick Peek Explanation"
       },
       {
-        "command": "ghia-ai.inlinePeek",
-        "title": "ghia-ai: Inline Peek Explanation"
+        "command": "pyaid.inlinePeek",
+        "title": "pyaid: Inline Peek Explanation"
       },
       {
-        "command": "ghia-ai.explainInPanel",
-        "title": "ghia-ai: Explain in Side Panel"
+        "command": "pyaid.explainInPanel",
+        "title": "pyaid: Explain in Side Panel"
       },
       {
-        "command": "ghia-ai.explainFloating",
-        "title": "ghia-ai: Explain in Floating Panel"
+        "command": "pyaid.explainFloating",
+        "title": "pyaid: Explain in Floating Panel"
       },
       {
-        "command": "ghia-ai.openWidePanel",
-        "title": "ghia-ai: Open Wide Panel"
+        "command": "pyaid.openWidePanel",
+        "title": "pyaid: Open Wide Panel"
       },
       {
-        "command": "ghia-ai.experiment.menu",
-        "title": "ghia-ai: Hover Experiments Menu"
+        "command": "pyaid.experiment.menu",
+        "title": "pyaid: Hover Experiments Menu"
       },
       {
-        "command": "ghia-ai.experiment.stop",
-        "title": "ghia-ai: Stop Hover Experiment"
+        "command": "pyaid.experiment.stop",
+        "title": "pyaid: Stop Hover Experiment"
       },
       {
-        "command": "ghia-ai.experiment.status",
-        "title": "ghia-ai: Show Experiment Status"
+        "command": "pyaid.experiment.status",
+        "title": "pyaid: Show Experiment Status"
       },
       {
-        "command": "ghia-ai.experiment.run.null-returning",
-        "title": "ghia-ai: Run Experiment - Null Returning"
+        "command": "pyaid.experiment.run.null-returning",
+        "title": "pyaid: Run Experiment - Null Returning"
       },
       {
-        "command": "ghia-ai.experiment.run.always-return",
-        "title": "ghia-ai: Run Experiment - Always Return Hover"
+        "command": "pyaid.experiment.run.always-return",
+        "title": "pyaid: Run Experiment - Always Return Hover"
       },
       {
-        "command": "ghia-ai.experiment.run.conditional",
-        "title": "ghia-ai: Run Experiment - Conditional Hover"
+        "command": "pyaid.experiment.run.conditional",
+        "title": "pyaid: Run Experiment - Conditional Hover"
       },
       {
-        "command": "ghia-ai.experiment.run.multi-provider",
-        "title": "ghia-ai: Run Experiment - Multi Provider"
+        "command": "pyaid.experiment.run.multi-provider",
+        "title": "pyaid: Run Experiment - Multi Provider"
       },
       {
-        "command": "ghia-ai.experiment.run.registration-order-high-first",
-        "title": "ghia-ai: Run Experiment - Registration Order (High First)"
+        "command": "pyaid.experiment.run.registration-order-high-first",
+        "title": "pyaid: Run Experiment - Registration Order (High First)"
       },
       {
-        "command": "ghia-ai.experiment.run.registration-order-high-last",
-        "title": "ghia-ai: Run Experiment - Registration Order (High Last)"
+        "command": "pyaid.experiment.run.registration-order-high-last",
+        "title": "pyaid: Run Experiment - Registration Order (High Last)"
       },
       {
-        "command": "ghia-ai.experiment.run.registration-order-first-second-high",
-        "title": "ghia-ai: Run Experiment - Registration Order (Mixed)"
+        "command": "pyaid.experiment.run.registration-order-first-second-high",
+        "title": "pyaid: Run Experiment - Registration Order (Mixed)"
       },
       {
-        "command": "ghia-ai.experiment.run.async",
-        "title": "ghia-ai: Run Experiment - Async Provider"
+        "command": "pyaid.experiment.run.async",
+        "title": "pyaid: Run Experiment - Async Provider"
       },
       {
-        "command": "ghia-ai.experiment.run.undefined",
-        "title": "ghia-ai: Run Experiment - Undefined Return"
+        "command": "pyaid.experiment.run.undefined",
+        "title": "pyaid: Run Experiment - Undefined Return"
       },
       {
-        "command": "ghia-ai.experiment.run.empty-content",
-        "title": "ghia-ai: Run Experiment - Empty Content"
+        "command": "pyaid.experiment.run.empty-content",
+        "title": "pyaid: Run Experiment - Empty Content"
       },
       {
-        "command": "ghia-ai.askAI",
-        "title": "ghia-ai: Ask Local Model"
+        "command": "pyaid.askAI",
+        "title": "pyaid: Ask Local Model"
       }
     ],
     "views": {
       "explorer": [
         {
           "type": "webview",
-          "id": "ghia-ai.explanationPanel",
-          "name": "ghia-ai",
-          "when": "ghiaAI.prototype.sidePanelEnabled"
+          "id": "pyaid.explanationPanel",
+          "name": "pyaid",
+          "when": "pyaid.prototype.sidePanelEnabled"
         }
       ]
     },
     "keybindings": [
       {
-        "command": "ghia-ai.quickPeek",
+        "command": "pyaid.quickPeek",
         "key": "ctrl+shift+e",
         "mac": "cmd+shift+e",
         "when": "editorTextFocus"
       },
       {
-        "command": "ghia-ai.explainInPanel",
+        "command": "pyaid.explainInPanel",
         "key": "ctrl+shift+alt+e",
         "mac": "cmd+shift+alt+e",
         "when": "editorTextFocus"
       }
     ],
     "configuration": {
-      "title": "ghia-ai",
+      "title": "pyaid",
       "properties": {
-        "ghiaAI.ollamaEndpoint": {
+        "pyaid.ollamaEndpoint": {
           "type": "string",
           "default": "http://127.0.0.1:11434",
           "description": "Ollama API endpoint URL."
         },
-        "ghiaAI.model": {
+        "pyaid.model": {
           "type": "string",
           "default": "codegemma:2b",
           "description": "Model name to use for explanations."
         },
-        "ghiaAI.askPythonMode": {
+        "pyaid.askPythonMode": {
           "type": "boolean",
           "default": true,
           "description": "When true, free-form answers are tailored for Python developers with Python examples. Turn off to get general answers without Python code."
         },
-        "ghiaAI.highlightColor": {
+        "pyaid.highlightColor": {
           "type": "string",
           "default": "",
           "description": "Background color for the hover-highlighted code block (e.g. \"rgba(0, 128, 128, 0.2)\"). Leave empty to use theme-aware defaults (dark: teal 15%, light: teal 25%, high-contrast: white 10%)."
         },
-        "ghiaAI.enableExperiments": {
+        "pyaid.enableExperiments": {
           "type": "boolean",
           "default": false,
           "description": "Enable experimental hover provider testing module. Only enable for development/testing purposes."
         },
-        "ghiaAI.prototype.mode": {
+        "pyaid.prototype.mode": {
           "type": "string",
           "enum": [
             "hover",
@@ -225,12 +225,12 @@
           ],
           "description": "UI mode for displaying AI explanations. Each mode offers different trade-offs."
         },
-        "ghiaAI.prototype.sidePanelEnabled": {
+        "pyaid.prototype.sidePanelEnabled": {
           "type": "boolean",
           "default": true,
-          "description": "Show the ghia-ai panel in the Explorer sidebar."
+          "description": "Show the pyaid panel in the Explorer sidebar."
         },
-        "ghiaAI.prototype.enablePrototypes": {
+        "pyaid.prototype.enablePrototypes": {
           "type": "boolean",
           "default": true,
           "description": "Enable UI prototype alternatives (Peek View, Side Panel, Floating Panel). Set to false to disable alternative UI modes."

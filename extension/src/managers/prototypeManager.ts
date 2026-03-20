@@ -59,10 +59,10 @@ export class PrototypeManager implements vscode.Disposable {
 
   constructor(private readonly context: vscode.ExtensionContext) {
     // Enable Side Panel visibility by setting the context key
-    // This makes the "when": "ghiaAI.prototype.sidePanelEnabled" condition true
+    // This makes the "when": "pyaid.prototype.sidePanelEnabled" condition true
     void vscode.commands.executeCommand(
       "setContext",
-      "ghiaAI.prototype.sidePanelEnabled",
+      "pyaid.prototype.sidePanelEnabled",
       true
     );
 
@@ -71,7 +71,7 @@ export class PrototypeManager implements vscode.Disposable {
       vscode.StatusBarAlignment.Right,
       99
     );
-    this.statusBarItem.command = "ghia-ai.prototype.selectMode";
+    this.statusBarItem.command = "pyaid.prototype.selectMode";
     this.disposables.push(this.statusBarItem);
 
     // Initialize providers
@@ -86,7 +86,7 @@ export class PrototypeManager implements vscode.Disposable {
     // Listen for configuration changes
     this.disposables.push(
       vscode.workspace.onDidChangeConfiguration((e) => {
-        if (e.affectsConfiguration("ghiaAI.prototype")) {
+        if (e.affectsConfiguration("pyaid.prototype")) {
           this.loadConfiguration();
         }
       })
@@ -132,41 +132,41 @@ export class PrototypeManager implements vscode.Disposable {
   private registerCommands(): void {
     const commands = [
       // Mode selection
-      vscode.commands.registerCommand("ghia-ai.prototype.selectMode", () =>
+      vscode.commands.registerCommand("pyaid.prototype.selectMode", () =>
         this.showModeSelector()
       ),
       vscode.commands.registerCommand(
-        "ghia-ai.prototype.setMode",
+        "pyaid.prototype.setMode",
         (mode: UIMode) => this.setMode(mode)
       ),
 
       // Peek explanation command (opens in VS Code peek view)
-      vscode.commands.registerCommand("ghia-ai.peekExplanation", () =>
+      vscode.commands.registerCommand("pyaid.peekExplanation", () =>
         this.peekProvider?.showPeekExplanation()
       ),
 
       // Quick peek command
-      vscode.commands.registerCommand("ghia-ai.quickPeek", () =>
+      vscode.commands.registerCommand("pyaid.quickPeek", () =>
         this.quickPeekProvider?.showQuickPeek()
       ),
 
       // Inline peek command
-      vscode.commands.registerCommand("ghia-ai.inlinePeek", () =>
+      vscode.commands.registerCommand("pyaid.inlinePeek", () =>
         this.inlinePeekProvider?.showInlinePeek()
       ),
 
       // Side panel command
-      vscode.commands.registerCommand("ghia-ai.explainInPanel", () =>
+      vscode.commands.registerCommand("pyaid.explainInPanel", () =>
         this.sidePanelProvider?.explainCurrentSelection()
       ),
 
       // Floating panel command
       vscode.commands.registerCommand(
-        "ghia-ai.explainFloating",
+        "pyaid.explainFloating",
         (code?: string, context?: string) =>
           this.floatingPanelProvider?.showExplanation(code, context)
       ),
-      vscode.commands.registerCommand("ghia-ai.openWidePanel", () =>
+      vscode.commands.registerCommand("pyaid.openWidePanel", () =>
         this.floatingPanelProvider?.openPanel()
       ),
 
@@ -180,7 +180,7 @@ export class PrototypeManager implements vscode.Disposable {
    * Only reads config - does not write back to avoid recursive change events.
    */
   private loadConfiguration(): void {
-    const config = vscode.workspace.getConfiguration("ghiaAI.prototype");
+    const config = vscode.workspace.getConfiguration("pyaid.prototype");
     const mode = config.get<UIMode>("mode", "hover");
     // Apply mode without persisting - loadConfiguration is for reading only
     this.applyMode(mode);
@@ -240,14 +240,14 @@ export class PrototypeManager implements vscode.Disposable {
     ];
 
     const selection = await vscode.window.showQuickPick(items, {
-      title: "🧠 ghia-ai - Select UI Mode",
+      title: "PyAid - Select UI Mode",
       placeHolder: `Current mode: ${this.currentMode}`,
     });
 
     if (selection) {
       await this.setMode(selection.mode);
       vscode.window.showInformationMessage(
-        `ghia-ai mode set to: ${selection.label.replace(/\$\([^)]+\)\s*/, "")}`
+        `PyAid mode set to: ${selection.label.replace(/\$\([^)]+\)\s*/, "")}`
       );
     }
   }
@@ -258,7 +258,7 @@ export class PrototypeManager implements vscode.Disposable {
    */
   async setMode(mode: UIMode): Promise<void> {
     // Guard: skip config update if mode hasn't changed
-    const config = vscode.workspace.getConfiguration("ghiaAI.prototype");
+    const config = vscode.workspace.getConfiguration("pyaid.prototype");
     const storedMode = config.get<UIMode>("mode");
 
     // Apply the mode (UI changes)
@@ -301,7 +301,7 @@ export class PrototypeManager implements vscode.Disposable {
 
       case "sidepanel":
         this.updateStatusBar("$(layout-sidebar-right)", "Side Panel Mode");
-        vscode.commands.executeCommand("ghia-ai.explanationPanel.focus");
+        vscode.commands.executeCommand("pyaid.explanationPanel.focus");
         break;
 
       case "floatingpanel":
@@ -312,12 +312,12 @@ export class PrototypeManager implements vscode.Disposable {
 
   /**
    * Enables Peek mode.
-   * Peek is now command-based (ghia-ai.peekExplanation) to avoid
+   * Peek is now command-based (pyaid.peekExplanation) to avoid
    * intercepting Go to Definition. No provider registration needed.
    */
   private enablePeekMode(): void {
     // Peek mode is command-based - no definition provider registration
-    // Users invoke via the ghia-ai.peekExplanation command
+    // Users invoke via the pyaid.peekExplanation command
   }
 
   /**
@@ -331,7 +331,7 @@ export class PrototypeManager implements vscode.Disposable {
    */
   private updateStatusBar(icon: string, tooltip: string): void {
     this.statusBarItem.text = `${icon} AI Mode`;
-    this.statusBarItem.tooltip = `ghia-ai: ${tooltip}\nClick to change mode`;
+    this.statusBarItem.tooltip = `PyAid: ${tooltip}\nClick to change mode`;
     this.statusBarItem.show();
   }
 
@@ -361,7 +361,7 @@ export class PrototypeManager implements vscode.Disposable {
         break;
       default:
         vscode.window.showInformationMessage(
-          `In ${this.currentMode} mode, hover or run a ghia-ai command to see explanations.`
+          `In ${this.currentMode} mode, hover or run a PyAid command to see explanations.`
         );
     }
   }
